@@ -46,12 +46,12 @@ type Token {
   # derived prices
   derivedETH: BigDecimal!
 
-  # derived fields - TODO: Implement proper Envio entity references
-  # tokenDayData: [TokenDayData!]! @derivedFrom(field: "token")
-  # pairDayDataBase: [PairDayData!]! @derivedFrom(field: "token0")
-  # pairDayDataQuote: [PairDayData!]! @derivedFrom(field: "token1")
-  # pairBase: [Pair!]! @derivedFrom(field: "token0")
-  # pairQuote: [Pair!]! @derivedFrom(field: "token1")
+  # derived fields
+  tokenDayData: [TokenDayData!]! @derivedFrom(field: "token")
+  pairDayDataBase: [PairDayData!]! @derivedFrom(field: "token0")
+  pairDayDataQuote: [PairDayData!]! @derivedFrom(field: "token1")
+  pairBase: [Pair!]! @derivedFrom(field: "token0")
+  pairQuote: [Pair!]! @derivedFrom(field: "token1")
 }
 
 type Pair {
@@ -88,11 +88,11 @@ type Pair {
 
   # Fields used to help derived relationship
   liquidityProviderCount: BigInt! # used to detect new exchanges
-  # derived fields - TODO: Implement proper Envio entity references
-  # pairHourData: [PairHourData!]! @derivedFrom(field: "pair")
-  # mints: [Mint!]! @derivedFrom(field: "pair")
-  # burns: [Burn!]! @derivedFrom(field: "pair")
-  # swaps: [Swap!]! @derivedFrom(field: "pair")
+  # derived fields
+  pairHourData: [PairHourData!]! @derivedFrom(field: "pair")
+  mints: [Mint!]! @derivedFrom(field: "pair")
+  burns: [Burn!]! @derivedFrom(field: "pair")
+  swaps: [Swap!]! @derivedFrom(field: "pair")
 }
 
 type User {
@@ -106,10 +106,9 @@ type Transaction {
   timestamp: BigInt!
   # This is not the reverse of Mint.transaction; it is only used to
   # track incomplete mints (similar for burns and swaps)
-  # TODO: Implement proper Envio entity references
-  # mints: [Mint!]!
-  # burns: [Burn!]!
-  # swaps: [Swap!]!
+  mints: [Mint!]! @derivedFrom(field: "transaction")
+  burns: [Burn!]! @derivedFrom(field: "transaction")
+  swaps: [Swap!]! @derivedFrom(field: "transaction")
 }
 
 type Mint {

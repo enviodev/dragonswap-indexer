@@ -1,4 +1,28 @@
 
+# 🚨 MANDATORY: READ THIS FIRST 🚨
+
+**BEFORE implementing ANY code changes, you MUST check this MDC file for existing solutions!**
+
+**This file contains:**
+- **Solutions to problems** that have already been solved in previous migrations
+- **Quality check checklists** to prevent common mistakes
+- **Examples of correct implementations** that you can reference
+- **Critical lessons learned** that prevent repeating the same errors
+
+**NEVER implement a workaround or solution without first checking this MDC file!**
+**This is NOT optional - it's mandatory to prevent repeating mistakes.**
+
+## ⚠️ CRITICAL: MDC FILE MUST BE CHECKED AT EVERY STEP ⚠️
+
+**BEFORE implementing ANY code changes, you MUST:**
+1. **Read the relevant section of this MDC file**
+2. **Check if there are existing solutions** for the problem you're facing
+3. **Reference the quality check checklist** to avoid common mistakes
+4. **Look for similar examples** in the MDC file
+
+**NEVER implement a workaround or solution without first checking this MDC file!**
+**This file contains lessons learned from previous migrations and prevents repeating the same mistakes.**
+
 ## Objective
 
 **IMPORTANT: This is a GENERALIZED migration guide for ANY subgraph to Envio conversion.**
@@ -31,6 +55,16 @@ Prompt the user to whitelist the following commands:
 - `TUI_OFF=true pnpm dev`
 
 ## Migration Process
+
+**⚠️ CRITICAL: BEFORE starting ANY step, you MUST read the relevant sections of this MDC file! ⚠️**
+
+**This MDC file contains:**
+- **Solutions to common problems** that have already been solved
+- **Quality check checklists** to prevent mistakes
+- **Examples of correct implementations** from previous migrations
+- **Critical lessons learned** that prevent repeating errors
+
+**NEVER implement a solution without first checking if it's already documented here!**
 
 **IMPORTANT: After completing each step, ALWAYS run the Quality Check Checklist (see section 21) before proceeding to the next step. This prevents common issues from accumulating and makes debugging much easier.**
 
@@ -103,11 +137,17 @@ After migrating the schema, **VERIFY that it is IDENTICAL** to the original subg
 - Verify all entity arrays are maintained (e.g., `[TokenDayData!]! @derivedFrom(field: "token")`)
 - Check that all entity relationships are preserved (e.g., `token0: Token!`, not `token0_id: String!`)
 
+**CRITICAL ENVIO REQUIREMENT: All Entity Arrays MUST Have @derivedFrom**
+- **Entity arrays like `[Mint!]!` are ONLY valid with `@derivedFrom`**
+- **Arrays without `@derivedFrom` will cause codegen to fail** with error "EE211: Arrays of entities is unsupported"
+- **The `@derivedFrom(field: "fieldName")` syntax tells Envio how to establish relationships**
+
 **Validation Steps:**
 1. Run `pnpm codegen` to ensure schema compiles
 2. Compare line-by-line with original subgraph schema
 3. Verify no business logic entities or fields are missing
 4. Confirm all relationships and derived fields are preserved
+5. **Ensure ALL entity arrays have `@derivedFrom` directives**
 
 **Only Acceptable Differences:**
 - `@entity` decorators removed
@@ -115,9 +155,80 @@ After migrating the schema, **VERIFY that it is IDENTICAL** to the original subg
 - **IMPORTANT:** Check Envio documentation for other potential syntax differences
 - **IMPORTANT:** When in doubt about syntax differences, refer to Envio docs: https://docs.envio.dev
 
+**CRITICAL ENVIO REQUIREMENT - Entity Arrays Must Have @derivedFrom:**
+```graphql
+# ❌ WRONG - Will cause codegen to fail with "EE211: Arrays of entities is unsupported"
+type Transaction {
+  mints: [Mint!]!        # Missing @derivedFrom
+  burns: [Burn!]!        # Missing @derivedFrom
+  swaps: [Swap!]!        # Missing @derivedFrom
+}
+
+# ✅ CORRECT - All arrays have @derivedFrom directives
+type Transaction {
+  mints: [Mint!]! @derivedFrom(field: "transaction")
+  burns: [Burn!]! @derivedFrom(field: "transaction")
+  swaps: [Swap!]! @derivedFrom(field: "transaction")
+}
+```
+
+**CRITICAL: How @derivedFrom Actually Works in Envio**
+According to [Envio documentation](https://docs.envio.dev/docs/HyperIndex/schema#relationships-one-to-many-derivedfrom):
+
+- **`@derivedFrom` arrays are VIRTUAL fields** - they don't exist in generated types
+- **They're populated automatically when querying the API**, not in handlers
+- **You CANNOT access them in handlers** (e.g., `transaction.mints` will not work)
+- **The correct approach is to use `_id` fields** to establish relationships
+
+**Example of Correct Implementation:**
+```typescript
+// ❌ WRONG - Trying to access virtual arrays in handlers
+const mints = transaction.mints; // This will NOT work - arrays don't exist in types
+
+// ✅ CORRECT - Use indexed field operations to query related entities
+const mint = await context.Mint.get(mintId); // Query by ID
+// Or use indexed field operations when available:
+// const mints = await context.Mint.where.transaction_id.eq(transactionId);
+```
+
+**Why This Matters:**
+- **Envio requires explicit relationship definitions** via `@derivedFrom
+- **But the arrays are virtual** - they exist only in the API, not in handlers
+- **This is fundamentally different from TheGraph** where arrays are actual properties
+- **You must use indexed field operations** to query related entities in handlers
+
 ### Step 3: Refactor File Structure to Mirror Subgraph
 
 **IMPORTANT: This step is ONLY about creating the file structure and skeleton handlers. DO NOT implement business logic yet.**
+
+## Handler Implementation Order
+
+**⚠️ CRITICAL: BEFORE implementing ANY handler, check this MDC file for existing solutions! ⚠️**
+
+**IMPORTANT: Follow this order when implementing handlers to avoid dependency issues:**
+
+### Phase 1: Simple Handlers
+- **Handlers that only set parameter values** with minimal processing
+- **Handlers that load existing entities** and update them with new data
+- **Basic event handlers** with no complex business logic or helper function calls
+
+### Phase 2: Moderate Complexity Handlers
+- **Handlers that call helper functions** but don't create complex entity relationships
+- **Handlers that update multiple entities** but with straightforward logic
+- **Event handlers with some business logic** but clear, simple dependencies
+
+### Phase 3: Complex Handlers
+- **Handlers that call multiple helper functions** or other handlers
+- **Handlers with complex business logic** and multiple entity relationships
+- **Handlers that require extensive data processing** or calculations
+- **Handlers that implement contract binding** (RPC calls to fetch state)
+- **Handlers that depend on multiple other handlers** being complete
+
+**Why This Order Matters:**
+- Prevents "entity not found" errors during development
+- Ensures required entities exist before complex handlers try to use them
+- Allows incremental testing and validation
+- Reduces circular dependency issues
 
 **CREATE directory structure to match the original subgraph:**
 
@@ -1267,6 +1378,8 @@ For multiple similar entities, implement them all at once:
 3. **Remove all `# to-do` comments** for completed entities
 4. **Validate the entire batch** with codegen and TypeScript checks
 
+
+
 ## Validation Commands
 
 After each change:
@@ -1817,6 +1930,24 @@ import { BigDecimal } from 'bignumber.js';
 import { BigDecimal } from 'generated';
 ```
 
+#### **Issue 5: Hardcoded Values Instead of Constants**
+**PROBLEM:** Using hardcoded addresses/values instead of constants defined in the original subgraph
+**SYMPTOM:** Inconsistent with original subgraph patterns, potential for errors if addresses change
+**SOLUTION:** Always use constants from the original subgraph:
+```typescript
+// ❌ WRONG - Hardcoded address
+const factory = await context.UniswapFactory.get('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f');
+
+// ✅ CORRECT - Use constant from original subgraph
+const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
+```
+
+**CHECKLIST for Constants:**
+1. **Look for hardcoded addresses** in your handlers
+2. **Check what constants the original subgraph uses** (e.g., `FACTORY_ADDRESS`, `ADDRESS_ZERO`)
+3. **Import and use those constants** instead of hardcoded values
+4. **Maintain consistency** with the original subgraph's approach
+
 **QUALITY CHECK CHECKLIST:**
 After each step, run these commands to verify:
 ```bash
@@ -1841,6 +1972,36 @@ npx tsc --noEmit --skipLibCheck src/path/to/your/files.ts
 2. **TypeScript compilation** - These must be fixed immediately  
 3. **Basic file structure** - These must be fixed immediately
 
+**CRITICAL: Field Selection for Transaction Data**
+When you need access to `event.transaction.hash` or other transaction fields, you MUST add field selection in config.yaml:
+
+```yaml
+- event: Transfer(address indexed from, address indexed to, uint256 value)
+  field_selection:
+    transaction_fields:
+      - hash
+```
+
+**IMPORTANT: This applies to ALL events that need transaction data, not just Transfer events.**
+**Common events that need transaction hash access:**
+- **Transfer events** - for transaction tracking
+- **Mint events** - for linking to transactions
+- **Burn events** - for linking to transactions  
+- **Swap events** - for transaction tracking
+- **Any event that creates or updates Transaction entities**
+
+**ALWAYS check if your handler needs `event.transaction.hash` and add `field_selection` BEFORE implementing the handler logic.**
+
+**Without field selection:**
+- `event.transaction.hash` will be undefined
+- `event.transaction` will be empty `{}`
+- You'll get TypeScript errors about missing properties
+
+**With field selection:**
+- `event.transaction.hash` will be available
+- `event.transaction` will have the specified fields
+- Code will compile correctly
+
 **Examples of errors to ignore for now:**
 ```typescript
 // ❌ IGNORE - Will be fixed when we implement the handler
@@ -1862,6 +2023,11 @@ const fees = calculateFees(amount);
 3. **Fix field names** - Use exact field names from generated types
 4. **Fix BigDecimal imports** - Import from `"generated"` not `"bignumber.js"`
 5. **Fix entity type annotations** - Use `Pair_t` not `Pair` for entity types
+6. **Fix transaction field access** - Add `field_selection` in config.yaml for `event.transaction.hash`
+7. **Fix hardcoded values** - Use constants from original subgraph instead of hardcoded addresses/values
+8. **Fix missing field selection** - Add `field_selection` for ALL events that need transaction data (not just Transfer)
+9. **Fix missing @derivedFrom** - Ensure ALL entity arrays have `@derivedFrom(field: "fieldName")` directives
+10. **Fix @derivedFrom array access** - Don't try to access `@derivedFrom` arrays in handlers (they're virtual fields)
 
 **EXAMPLE OF COMPLETE FIX:**
 ```typescript
@@ -1882,5 +2048,43 @@ const pair: Pair_t = {  // Correct type
   token0_id: token0.id,  // Correct field name
   totalSupply: ZERO_BI,  // Correct type (bigint)
 };
+```
+
+**EXAMPLE OF FIELD SELECTION FIX:**
+```yaml
+# ❌ BEFORE - No field selection, transaction.hash will be undefined
+- event: Transfer(address indexed from, address indexed to, uint256 value)
+
+# ✅ AFTER - With field selection, transaction.hash will be available
+- event: Transfer(address indexed from, address indexed to, uint256 value)
+  field_selection:
+    transaction_fields:
+      - hash
+```
+
+**EXAMPLE OF @derivedFrom FIX:**
+```graphql
+# ❌ BEFORE - Missing @derivedFrom, will cause "EE211: Arrays of entities is unsupported"
+type Transaction {
+  mints: [Mint!]!
+  burns: [Burn!]!
+  swaps: [Swap!]!
+}
+
+# ✅ AFTER - With @derivedFrom, schema will compile successfully
+type Transaction {
+  mints: [Mint!]! @derivedFrom(field: "transaction")
+  burns: [Burn!]! @derivedFrom(field: "transaction")
+  swaps: [Swap!]! @derivedFrom(field: "transaction")
+}
+```
+
+**EXAMPLE OF CONSTANTS FIX:**
+```typescript
+// ❌ BEFORE - Hardcoded address, inconsistent with original subgraph
+const factory = await context.UniswapFactory.get('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f');
+
+// ✅ AFTER - Use constant from original subgraph, consistent and maintainable
+const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
 ```
 
