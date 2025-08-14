@@ -187,8 +187,8 @@ Pair.Transfer.handler(async ({ event, context }) => {
     }
 
     // 3. Create User entities for from and to addresses
-    createUser(event.params.from);
-    createUser(event.params.to);
+    createUser(event.params.from, context);
+    createUser(event.params.to, context);
 
     // 4. Load Pair entity
     const pair = await context.Pair.get(event.srcAddress);

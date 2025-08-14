@@ -224,6 +224,116 @@ const mint = await context.Mint.get(mintId); // Query by ID
 - **Handlers that implement contract binding** (RPC calls to fetch state)
 - **Handlers that depend on multiple other handlers** being complete
 
+## Helper Function Implementation Strategy
+
+**⚠️ CRITICAL: Implement helper functions based on their dependencies, not arbitrary timing! ⚠️**
+
+**🚨 MANDATORY: When implementing helper functions, you MUST implement the COMPLETE logic, not just placeholders! 🚨**
+
+### Implement Helper Functions IMMEDIATELY If:
+- **No dependencies on incomplete entities/handlers**
+- **Only depends on constants, basic math, or already implemented pieces**
+- **Required for the current handler to function properly**
+
+### 🚨 CRITICAL IMPLEMENTATION REQUIREMENT:
+**When implementing helper functions that have no dependencies, you MUST:**
+
+1. **Read the MDC file** for existing implementation patterns and solutions
+2. **Implement the COMPLETE business logic** from the original subgraph
+3. **Use the documented Envio patterns** (RPC calls, entity context, etc.)
+4. **Include all fallback logic** and error handling from the original
+5. **NOT just add TODO comments** or placeholder implementations
+6. **Implement ALL function dependencies** that have no entity/handler dependencies
+
+**❌ WRONG - Just adding TODO comments:**
+```typescript
+export function fetchTokenSymbol(tokenAddress: string): string {
+  // TODO: Implement using Envio's RPC calls to ERC20 contracts
+  return 'UNKNOWN'; // This is NOT acceptable!
+}
+```
+
+**✅ CORRECT - Complete implementation:**
+```typescript
+export function fetchTokenSymbol(tokenAddress: string): string {
+  // Implement complete logic using documented Envio patterns
+  // Include all fallback logic and error handling
+  // Return actual working values, not placeholders
+}
+```
+
+### Examples of Helpers to Implement Now:
+```typescript
+// ✅ IMPLEMENT NOW - No dependencies on incomplete entities/handlers
+- fetchTokenSymbol()     // Only depends on RPC calls to token contracts
+- fetchTokenName()       // Only depends on RPC calls to token contracts  
+- fetchTokenDecimals()   // Only depends on RPC calls to token contracts
+- fetchTokenTotalSupply() // Only depends on RPC calls to token contracts
+- convertEthToDecimal()  // Only depends on constants and BigDecimal math
+- exponentToBigDecimal() // Only depends on constants and BigDecimal math
+- equalToZero()          // Only depends on constants and BigDecimal methods
+- isNullEthValue()       // Only depends on string comparison
+- getStaticDefinition()  // Only depends on static data arrays
+- SKIP_TOTAL_SUPPLY     // Only depends on static string arrays
+```
+
+### Examples of Helpers to Leave for Later:
+```typescript
+// ⏳ LEAVE FOR LATER - Depends on incomplete entities/handlers
+- updatePairDayData()    // Depends on PairDayData entity and day calculation logic
+- updatePairHourData()   // Depends on PairHourData entity and hour calculation logic
+- updateUniswapDayData() // Depends on UniswapDayData entity and global aggregations
+- updateTokenDayData()   // Depends on TokenDayData entity and token aggregations
+- calculateUSDValue()    // Depends on pricing logic and Bundle entity
+```
+
+### Why This Approach:
+1. **Complete, functional handlers** that can be tested immediately
+2. **No unnecessary delays** on helpers that are ready to implement
+3. **Clear separation** between what's ready now vs. what needs other pieces first
+4. **Better testing** since handlers have all their immediate dependencies
+
+### 🚨 COMMON MISTAKE TO AVOID:
+**Do NOT implement helper functions as placeholders with TODO comments when they have no dependencies. This defeats the purpose of the rule and creates incomplete, non-functional code.**
+
+### 🔍 CRITICAL: Check Function Dependencies Thoroughly
+
+**When implementing helper functions, you MUST examine ALL function calls within them:**
+
+1. **Look for function calls** like `getStaticDefinition()`, `isNullEthValue()`, etc.
+2. **Check if these functions have dependencies** on incomplete entities/handlers
+3. **If NO dependencies exist, implement them immediately** - don't skip them!
+4. **Examples of functions that should be implemented:**
+   - `getStaticDefinition()` - Just static data arrays and string comparisons
+   - `isNullEthValue()` - Just string comparison logic
+   - `SKIP_TOTAL_SUPPLY` constants - Just string arrays
+   - Any pure utility functions with no entity dependencies
+
+**❌ WRONG - Missing dependency implementation:**
+```typescript
+export function fetchTokenSymbol(tokenAddress: string): string {
+  // Missing: const staticDefinition = getStaticDefinition(tokenAddress);
+  // Missing: if (staticDefinition !== null) return staticDefinition.symbol;
+  
+  // Only implementing the RPC call part
+  return 'unknown';
+}
+```
+
+**✅ CORRECT - Complete dependency implementation:**
+```typescript
+export function fetchTokenSymbol(tokenAddress: string): string {
+  // ✅ IMPLEMENTED: Static definition check
+  const staticDefinition = getStaticDefinition(tokenAddress);
+  if (staticDefinition !== null) {
+    return staticDefinition.symbol;
+  }
+  
+  // ✅ IMPLEMENTED: RPC call logic
+  // ... rest of implementation
+}
+```
+
 **Why This Order Matters:**
 - Prevents "entity not found" errors during development
 - Ensures required entities exist before complex handlers try to use them
@@ -2028,6 +2138,7 @@ const fees = calculateFees(amount);
 8. **Fix missing field selection** - Add `field_selection` for ALL events that need transaction data (not just Transfer)
 9. **Fix missing @derivedFrom** - Ensure ALL entity arrays have `@derivedFrom(field: "fieldName")` directives
 10. **Fix @derivedFrom array access** - Don't try to access `@derivedFrom` arrays in handlers (they're virtual fields)
+11. **Check helper function dependencies** - Ensure all called functions without entity dependencies are implemented
 
 **EXAMPLE OF COMPLETE FIX:**
 ```typescript

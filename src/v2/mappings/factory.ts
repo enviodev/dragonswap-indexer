@@ -64,10 +64,10 @@ Factory.PairCreated.handler(async ({ event, context }) => {
     let token0 = await context.Token.get(event.params.token0);
     if (!token0) {
       // Fetch token metadata
-      const symbol0 = fetchTokenSymbol(event.params.token0);
-      const name0 = fetchTokenName(event.params.token0);
-      const totalSupply0 = fetchTokenTotalSupply(event.params.token0);
-      const decimals0 = fetchTokenDecimals(event.params.token0);
+      const symbol0 = await fetchTokenSymbol(event.params.token0);
+      const name0 = await fetchTokenName(event.params.token0);
+      const totalSupply0 = await fetchTokenTotalSupply(event.params.token0);
+      const decimals0 = await fetchTokenDecimals(event.params.token0);
 
       // Bail if we couldn't figure out the decimals
       if (decimals0 === null) {
@@ -94,10 +94,10 @@ Factory.PairCreated.handler(async ({ event, context }) => {
     let token1 = await context.Token.get(event.params.token1);
     if (!token1) {
       // Fetch token metadata
-      const symbol1 = fetchTokenSymbol(event.params.token1);
-      const name1 = fetchTokenName(event.params.token1);
-      const totalSupply1 = fetchTokenTotalSupply(event.params.token1);
-      const decimals1 = fetchTokenDecimals(event.params.token1);
+      const symbol1 = await fetchTokenSymbol(event.params.token1);
+      const name1 = await fetchTokenName(event.params.token1);
+      const totalSupply1 = await fetchTokenTotalSupply(event.params.token1);
+      const decimals1 = await fetchTokenDecimals(event.params.token1);
 
       // Bail if we couldn't figure out the decimals
       if (decimals1 === null) {
