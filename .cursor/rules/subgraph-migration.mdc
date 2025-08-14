@@ -1,0 +1,1597 @@
+
+## Objective
+
+**IMPORTANT: This is a GENERALIZED migration guide for ANY subgraph to Envio conversion.**
+**All examples use generic names (Contract1, Contract2, Entity, etc.) and should be adapted to your specific subgraph.**
+
+Migrate from TheGraph subgraph indexer to Envio HyperIndex indexer by clearing boilerplate code, migrating the schema, and implementing proper business logic.
+
+## Context to Load
+
+Always include:
+
+- Envio documentation: https://docs.envio.dev
+- TheGraph to Envio migration guide: https://docs.envio.dev/docs/migrate-from-thegraph
+- Example indexer (Uniswap v4): https://github.com/enviodev/uniswap-v4-indexer
+- Example indexer (Safe): https://github.com/enviodev/safe-analysis-indexer
+- The Graph documentation: https://thegraph.com/docs/en/indexing/overview/
+
+## Development Environment Requirements
+
+Ensure the following are installed and used:
+
+- Node.js v20 only (no higher or lower versions)
+- pnpm as the package manager
+- docker installed
+
+Prompt the user to whitelist the following commands:
+
+- `pnpm codegen`
+- `pnpm tsc --noEmit`
+- `TUI_OFF=true pnpm dev`
+
+## Migration Process
+
+### Step 1: Clear Boilerplate Code
+### Step 2: Migrate Schema from Raw Events to Business Logic
+### Step 3: Refactor File Structure to Mirror Subgraph
+### Step 4: Register Dynamic Contracts with Factory Events
+### Step 5: Reference Original Subgraph Logic
+### Step 6: Implement Migration Patterns
+
+When working with EventHandlers.ts, clear all boilerplate logic and start fresh:
+
+```typescript
+// CLEAR THIS BOILERPLATE CODE:
+Contract.EventName.handler(async ({ event, context }) => {
+  const entity: EventEntity = {
+    id: `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    field1: event.params.field1,
+    field2: event.params.field2,
+    // ... other fields
+  };
+
+  context.EventEntity.set(entity);
+});
+
+// REPLACE WITH EMPTY HANDLERS:
+Contract.EventName.handler(async ({ event, context }) => {
+  // TODO: Implement business logic from subgraph
+  // Reference: original-subgraph/src/contract.ts
+});
+```
+
+### Step 2: Migrate Schema from Raw Events to Business Logic
+
+**CONVERT raw event entities from TheGraph to Envio format:**
+
+```graphql
+# OLD (TheGraph):
+type EventEntity @entity(immutable: true) {
+  id: Bytes!
+  field1: Bytes!
+  field2: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# NEW (Envio):
+type EventEntity {
+  id: ID!
+  field1: String!
+  field2: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: String!
+}
+```
+
+**KEEP all entities from the original subgraph** but convert them to Envio format:
+- Remove `@entity` decorators
+- Change `Bytes!` to `String!`
+- Change `ID!` to `ID!` (keep as is)
+- Keep all business logic entities
+
+**CRITICAL: Verify Schema Completeness**
+After migrating the schema, **VERIFY that it is IDENTICAL** to the original subgraph schema (apart from Envio vs TheGraph syntax):
+
+**Check for Missing Derived Fields:**
+- Ensure all `@derivedFrom` relationships are preserved
+- Verify all entity arrays are maintained (e.g., `[TokenDayData!]! @derivedFrom(field: "token")`)
+- Check that all entity relationships are preserved (e.g., `token0: Token!`, not `token0_id: String!`)
+
+**Validation Steps:**
+1. Run `pnpm codegen` to ensure schema compiles
+2. Compare line-by-line with original subgraph schema
+3. Verify no business logic entities or fields are missing
+4. Confirm all relationships and derived fields are preserved
+
+**Only Acceptable Differences:**
+- `@entity` decorators removed
+- `Bytes!` → `String!`
+- **IMPORTANT:** Check Envio documentation for other potential syntax differences
+- **IMPORTANT:** When in doubt about syntax differences, refer to Envio docs: https://docs.envio.dev
+
+### Step 3: Refactor File Structure to Mirror Subgraph
+
+**IMPORTANT: This step is ONLY about creating the file structure and skeleton handlers. DO NOT implement business logic yet.**
+
+**CREATE directory structure to match the original subgraph:**
+
+```bash
+src/
+├── utils/
+│   ├── constants.ts    (skeleton - for constants)
+│   └── helpers.ts      (skeleton - for helper functions)
+├── intervals/
+│   └── timeUpdates.ts  (skeleton - for time-based data)
+├── contract1.ts        (skeleton - for Contract1 handlers)
+├── contract2.ts        (skeleton - for Contract2 handlers)
+└── contract3.ts        (skeleton - for Contract3 handlers)
+```
+
+**MOVE handlers from EventHandlers.ts to contract-specific files:**
+
+```typescript
+// OLD: Single EventHandlers.ts file
+// src/EventHandlers.ts - All handlers in one file
+
+// NEW: Separate files by contract
+// src/contract1.ts - Contract1 handlers (skeleton only)
+// src/contract2.ts - Contract2 handlers (skeleton only)
+// src/contract3.ts - Contract3 handlers (skeleton only)
+```
+
+**UPDATE config.yaml to point to specific handler files:**
+
+```yaml
+# OLD: Single handler file
+- name: Contract1
+  handler: src/EventHandlers.ts
+
+# NEW: Contract-specific handler files
+- name: Contract1
+  handler: src/contract1.ts
+- name: Contract2
+  handler: src/contract2.ts
+- name: Contract3
+  handler: src/contract3.ts
+```
+
+**REMOVE the original EventHandlers.ts file** after moving all handlers.
+
+**CRITICAL: Keep handlers as skeletons with TODO comments only:**
+
+```typescript
+// ✅ CORRECT - Skeleton handler for this step
+export function handleEventName(event: Contract_EventName_event, context: any): void {
+  // TODO: Implement business logic from subgraph
+  // Reference: original-subgraph/src/mappings/contract.ts
+}
+
+// ❌ WRONG - Don't implement business logic in this step
+export function handleEventName(event: Contract_EventName_event, context: any): void {
+  // Implementation details here...
+  let entity = context.Entity.get(id);
+  // ... more implementation
+}
+```
+
+**Utility files should also be skeletons:**
+
+```typescript
+// ✅ CORRECT - Skeleton utility files
+// src/utils/constants.ts
+// TODO: Add constants from original subgraph helpers
+// Reference: original-subgraph/src/mappings/helpers.ts
+
+// src/utils/helpers.ts  
+// TODO: Add helper functions from original subgraph helpers
+// Reference: original-subgraph/src/mappings/helpers.ts
+
+// src/intervals/timeUpdates.ts
+// TODO: Add time update functions from original subgraph
+// Reference: original-subgraph/src/mappings/timeUpdates.ts
+```
+
+### Step 4: Register Dynamic Contracts with Factory Events
+
+**CRITICAL: This step is essential for Envio to track dynamically created contracts.**
+
+**IDENTIFY dynamic contracts in the original subgraph.yaml:**
+Look for contracts that have **NO address** - these are created by factory contracts and need to be registered with Envio.
+
+**EXAMPLE from subgraph.yaml:**
+```yaml
+# Factory contract (has address)
+- kind: ethereum/contract
+  name: Factory
+  source:
+    address: '0x...'  # ✅ Has address
+
+# Dynamic contract (no address - created by factory)
+templates:
+  - kind: ethereum/contract
+    name: Pair  # ❌ No address - created dynamically
+    source:
+      abi: Pair
+```
+
+**IMPLEMENT contract registration for factory events:**
+Add `contractRegister` above the handler for events that create new contracts:
+
+```typescript
+// ✅ CORRECT - Register dynamic contract with Envio
+Factory.PairCreated.contractRegister(({ event, context }) => {
+  context.addPair(event.params.pair);
+});
+
+// Then implement the handler
+Factory.PairCreated.handler(async ({ event, context }) => {
+  // TODO: Implement business logic from subgraph
+  // Reference: original-subgraph/src/mappings/factory.ts
+});
+```
+
+**UPDATE config.yaml for dynamic contracts:**
+Remove the `address` field from contracts that are created dynamically by factories:
+
+```yaml
+# ✅ CORRECT - Factory contract (has address)
+- name: Factory
+  address:
+    - 0xFactoryAddress
+  handler: src/factory.ts
+
+# ✅ CORRECT - Dynamic contract (no address - created by factory)
+- name: Pair
+  handler: src/core.ts  # No address field!
+  events:
+    - event: Mint(...)
+      handler: handleMint
+```
+
+**❌ WRONG - Don't include addresses for dynamic contracts:**
+```yaml
+# ❌ WRONG - Dynamic contract should not have address
+- name: Pair
+  address:  # This should be removed!
+    - 0xSomeAddress
+  handler: src/core.ts
+```
+
+**COMMON PATTERNS:**
+```typescript
+// For Pair contracts
+Factory.PairCreated.contractRegister(({ event, context }) => {
+  context.addPair(event.params.pair);
+});
+
+// For Vault contracts  
+VaultFactory.VaultCreated.contractRegister(({ event, context }) => {
+  context.addVault(event.params.vault);
+});
+
+// For OrderBook contracts
+OrderbookFactory.OrderbookCreated.contractRegister(({ event, context }) => {
+  context.addOrderBook(event.params.orderbook);
+});
+
+// For Pool contracts
+PoolFactory.PoolCreated.contractRegister(({ event, context }) => {
+  context.addPool(event.params.pool);
+});
+```
+
+**IMPORTANT NOTES:**
+- **MUST be placed above the handler** for the same event
+- **MUST use the exact contract name** from your config.yaml (e.g., `addPair` for `Pair` contracts)
+- **MUST reference the correct event parameter** that contains the new contract address
+- **Without this, Envio cannot index the dynamically created contracts**
+
+### Step 5: Reference Original Subgraph Logic
+
+For each handler, examine the corresponding subgraph file:
+
+- `original-subgraph/src/contract1.ts` → Contract1 handlers
+- `original-subgraph/src/contract2.ts` → Contract2 handlers  
+- `original-subgraph/src/contract3.ts` → Contract3 handlers
+
+### Step 6: Implement Migration Patterns
+
+#### Entity Creation Pattern
+
+```typescript
+// OLD SUBGRAPH PATTERN:
+let entity = new EventEntity(
+  event.transaction.hash.concatI32(event.logIndex.toI32())
+);
+entity.field1 = event.params.field1;
+entity.save();
+
+// NEW ENVIO PATTERN:
+const entity: EventEntity = {
+  id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+  field1: event.params.field1,
+  blockNumber: BigInt(event.block.number),
+  blockTimestamp: BigInt(event.block.timestamp),
+  transactionHash: event.transaction.hash,
+};
+
+context.EventEntity.set(entity);
+```
+
+#### Entity Updates Pattern
+
+```typescript
+// OLD SUBGRAPH PATTERN:
+let entity = store.get("EntityName", id);
+if (entity) {
+  entity.field = newValue;
+  entity.save();
+}
+
+// NEW ENVIO PATTERN:
+let entity = await context.EntityName.get(id);
+if (entity) {
+  const updatedEntity: EntityName = {
+    ...entity,
+    field: newValue,
+    updatedAt: BigInt(Date.now()),
+  };
+  context.EntityName.set(updatedEntity);
+}
+```
+
+#### Contract Registration Pattern
+
+```typescript
+// OLD SUBGRAPH PATTERN:
+ContractTemplate.create(event.params.contract);
+
+// NEW ENVIO PATTERN:
+Contract.EventCreated.contractRegister(({ event, context }) => {
+  context.addContract(event.params.contract);
+});
+```
+
+pnpm dev## Contract State Fetching Migration
+
+### Overview
+
+When migrating from TheGraph to Envio, contract state fetching patterns need to be updated. TheGraph uses `.bind()` patterns for contract state access, while Envio requires explicit RPC calls using Viem or similar libraries.
+
+### 1. Identify Contract State Usage
+
+**Look for `.bind()` patterns in the original subgraph:**
+
+```typescript
+// OLD SUBGRAPH PATTERN - Contract State Fetching
+let token = Token.bind(event.params.token);
+let vault = Vault.bind(event.params.vault);
+
+// Access contract state
+entity.name = token.name();
+entity.symbol = token.symbol();
+entity.decimals = token.decimals();
+entity.totalSupply = token.totalSupply();
+
+// Vault state
+entity.asset = vault.asset();
+entity.totalAssets = vault.totalAssets();
+entity.totalShares = vault.totalSupply();
+```
+
+### 2. Create Contract Helper Functions
+
+**Create utility functions for contract state fetching:**
+
+```typescript
+// src/utils/contractHelpers.ts
+export interface TokenMetadata {
+  name: string;
+  symbol: string;
+  decimals: number;
+  totalSupply: bigint;
+}
+
+
+
+/**
+ * Fetch ERC20 token metadata using Viem RPC calls
+ * @param tokenAddress The token contract address (can be vault or token)
+ * @returns Promise<TokenMetadata> Token metadata
+ */
+export async function getTokenMetadata(tokenAddress: string): Promise<TokenMetadata> {
+  try {
+    const [name, symbol, decimals, totalSupply] = await Promise.all([
+      publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'name',
+      }),
+      publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'symbol',
+      }),
+      publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'decimals',
+      }),
+      publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'totalSupply',
+      }),
+    ]);
+
+    return {
+      name,
+      symbol,
+      decimals: Number(decimals),
+      totalSupply,
+    };
+  } catch (error) {
+    console.error(`Error fetching token metadata for ${tokenAddress}:`, error);
+    throw error;
+  }
+}
+
+
+
+/**
+ * Batch fetch token metadata for multiple tokens
+ * @param tokenAddresses Array of token addresses
+ * @returns Promise<TokenMetadata[]> Array of token metadata
+ */
+export async function getBatchTokenMetadata(tokenAddresses: string[]): Promise<TokenMetadata[]> {
+  const promises = tokenAddresses.map(address => getTokenMetadata(address));
+  return Promise.all(promises);
+}
+
+
+```
+
+### 3. Implement Viem Contract State Fetching
+
+**For production use, implement actual Viem RPC calls:**
+
+```typescript
+import { createPublicClient, http, parseAbi } from 'viem';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+// ERC20 ABI for basic token functions
+const ERC20_ABI = parseAbi([
+  'function name() view returns (string)',
+  'function symbol() view returns (string)',
+  'function decimals() view returns (uint8)',
+  'function totalSupply() view returns (uint256)',
+  'function balanceOf(address) view returns (uint256)',
+]);
+
+
+
+// Create a public client for reading contract state
+// Using MegaETH testnet (network ID 6342)
+const publicClient = createPublicClient({
+  chain: {
+    id: 6342,
+    name: 'MegaETH Testnet',
+    network: 'megaeth-testnet',
+    nativeCurrency: {
+      decimals: 18,
+      name: 'MegaETH',
+      symbol: 'METH',
+    },
+    rpcUrls: {
+      default: {
+        http: [process.env.RPC_URL || 'https://rpc.ankr.com/megaeth_testnet'],
+      },
+      public: {
+        http: [process.env.RPC_URL || 'https://rpc.ankr.com/megaeth_testnet'],
+      },
+    },
+  },
+  transport: http(process.env.RPC_URL),
+});
+
+
+
+
+```
+
+### 4. Handler Implementation Pattern
+
+**Replace `.bind()` patterns with async contract state fetching:**
+
+```typescript
+// OLD SUBGRAPH PATTERN:
+Contract.EventName.handler((event) => {
+  let token = Token.bind(event.params.token);
+  let entity = new Entity();
+  entity.name = token.name();
+  entity.symbol = token.symbol();
+  entity.save();
+});
+
+// NEW ENVIO PATTERN:
+Contract.EventName.handler(async ({ event, context }) => {
+  try {
+    // Fetch contract state using helper functions
+    const tokenMetadata = await getTokenMetadata(event.params.token);
+    const vaultMetadata = await getTokenMetadata(event.params.vault); // Vault is also an ERC20 token
+    
+    // Create entity with fetched data
+    const entity: Entity = {
+      id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+      name: tokenMetadata.name,
+      symbol: tokenMetadata.symbol,
+      decimals: BigInt(tokenMetadata.decimals),
+      totalSupply: tokenMetadata.totalSupply,
+      vaultName: vaultMetadata.name,
+      vaultSymbol: vaultMetadata.symbol,
+      vaultDecimals: BigInt(vaultMetadata.decimals),
+      vaultTotalSupply: vaultMetadata.totalSupply,
+      blockNumber: BigInt(event.block.number),
+      blockTimestamp: BigInt(event.block.timestamp),
+      transactionHash: event.transaction.hash,
+    };
+
+    context.Entity.set(entity);
+  } catch (error) {
+    console.error(`Error in EventName handler: ${error}`);
+    // Don't throw - let the indexer continue
+  }
+});
+```
+
+### 5. Factory Contract Registration with State Fetching
+
+**Example: Contract Factory with contract state fetching:**
+
+```typescript
+// Reference: original-subgraph/src/contractFactory.ts
+ContractFactory.ContractCreated.contractRegister(({ event, context }) => {
+  context.addContract(event.params.contract);
+});
+
+ContractFactory.ContractCreated.handler(async ({ event, context }) => {
+  try {
+    // Get or create ContractFactory entity
+    let contractFactory = await context.ContractFactory.get(ONE_BI.toString());
+    if (!contractFactory) {
+      contractFactory = {
+        id: ONE_BI.toString(),
+        totalContracts: ZERO_BI,
+        timestamp: BigInt(event.block.timestamp),
+        lastUpdate: BigInt(event.block.timestamp),
+      };
+    }
+
+    // Update contract factory stats
+    const updatedContractFactory = {
+      ...contractFactory,
+      totalContracts: contractFactory.totalContracts + ONE_BI,
+      lastUpdate: BigInt(event.block.timestamp),
+    };
+    context.ContractFactory.set(updatedContractFactory);
+
+    // Fetch ERC20 metadata for both contract and token (parallel)
+    const [contractMetadata, tokenMetadata] = await Promise.all([
+      getTokenMetadata(event.params.contract), // Contract is also an ERC20 token
+      getTokenMetadata(event.params.token), // Token is an ERC20 token
+    ]);
+    
+    // Get or create Token entity
+    let token = await context.Token.get(event.params.token);
+    if (!token) {
+      token = {
+        id: event.params.token,
+        name: tokenMetadata.name,
+        symbol: tokenMetadata.symbol,
+        decimals: BigInt(tokenMetadata.decimals),
+        rate: ZERO_BD as any,
+        dataFeedId: event.params.token,
+        updatedAt: BigInt(event.block.timestamp),
+        blockNumber: BigInt(event.block.number),
+        blockTimestamp: BigInt(event.block.timestamp),
+        transactionHash: event.transaction.hash,
+        address: event.params.token,
+      };
+      context.Token.set(token);
+    }
+
+    // Calculate derived values
+    let convertToAssetsMultiplier = ONE_BD as any;
+    // In a real implementation, you would calculate this based on contract state
+    // For now, use ONE_BD to match the original subgraph logic
+
+    // Create ContractDataEntity with fetched contract state
+    const contract: ContractDataEntity = {
+      id: event.params.contract,
+      name: contractMetadata.name, // Use contract's ERC20 metadata
+      symbol: contractMetadata.symbol, // Use contract's ERC20 metadata
+      decimals: BigInt(contractMetadata.decimals), // Use contract's ERC20 decimals
+      manager: event.params.poolManager,
+      timestamp: BigInt(event.block.timestamp),
+      lastUpdate: BigInt(event.block.timestamp),
+      fee: ZERO_BI,
+      depositApy: ZERO_BI, // Will be calculated later
+      convertToAssetsMultiplier,
+      totalDepositsVolume: ZERO_BI,
+      totalWithdrawalsVolume: ZERO_BI,
+      totalAssets: ZERO_BI, // Will be updated later
+      totalShares: ZERO_BI, // Will be updated later
+      token_id: event.params.token,
+      contractFactory_id: ONE_BI.toString(),
+    };
+
+    context.ContractDataEntity.set(contract);
+
+  } catch (error) {
+    console.error(`Error in VaultCreated handler: ${error}`);
+    // Don't throw - let the indexer continue
+  }
+});
+```
+
+### 6. Error Handling for Contract State Fetching
+
+**Always include proper error handling for RPC calls:**
+
+```typescript
+Contract.EventName.handler(async ({ event, context }) => {
+  try {
+    // Fetch contract state
+    const tokenMetadata = await getTokenMetadata(event.params.token);
+    
+    // Create entity with fetched data
+    const entity: Entity = {
+      // ... entity fields
+    };
+
+    context.Entity.set(entity);
+  } catch (error) {
+    console.error(`Error fetching contract state for ${event.params.token}:`, error);
+    
+    // Option 1: Use default values
+    const entity: Entity = {
+      // ... entity fields with defaults
+    };
+    context.Entity.set(entity);
+    
+    // Option 2: Skip entity creation
+    // return;
+    
+    // Option 3: Re-throw to stop processing
+    // throw error;
+  }
+});
+```
+
+### 7. Batch Contract State Fetching
+
+**For efficiency, batch multiple contract state fetches:**
+
+```typescript
+Contract.EventName.handler(async ({ event, context }) => {
+  try {
+    // Batch fetch multiple contract states
+    const [tokenMetadata, vaultMetadata, poolMetadata] = await Promise.all([
+      getTokenMetadata(event.params.token),
+      getTokenMetadata(event.params.vault), // Vault is also an ERC20 token
+      getPoolMetadata(event.params.pool),
+    ]);
+    
+    // Create entities with all fetched data
+    const entity: Entity = {
+      // ... entity fields using all metadata
+    };
+
+    context.Entity.set(entity);
+  } catch (error) {
+    console.error(`Error in batch contract state fetch:`, error);
+    // Handle error appropriately
+  }
+});
+```
+
+### 8. Configuration for Contract State Fetching
+
+**Add field selection for events that need transaction data:**
+
+```yaml
+# config.yaml
+- name: ContractFactory
+  address:
+    - 0xContractFactoryAddress
+  handler: src/contractFactory.ts
+  events:
+    - event: ContractCreated(address indexed contract, address indexed token, address indexed poolManager)
+      field_selection:
+        transaction_fields:
+          - hash
+```
+
+### 9. Dependencies Installation
+
+**Install Viem for contract state fetching:**
+
+```bash
+pnpm add viem
+```
+
+### 10. Validation Commands
+
+**After implementing contract state fetching:**
+
+1. `pnpm codegen` - Regenerate types after schema changes
+2. `pnpm tsc --noEmit` - Check TypeScript compilation
+3. `TUI_OFF=true pnpm dev` - Test runtime behavior with contract state fetching
+
+## Key Differences Between TheGraph and Envio
+
+### 1. Entity Relationships
+
+**TheGraph (OLD):**
+```typescript
+entity.relatedEntity = event.params.entity.toHexString();
+```
+
+**Envio (NEW):**
+```typescript
+relatedEntity_id: event.params.entity;
+```
+
+### 2. Timestamp Handling
+
+**TheGraph (OLD):**
+```typescript
+entity.blockTimestamp = event.block.timestamp;
+```
+
+**Envio (NEW):**
+```typescript
+blockTimestamp: BigInt(event.block.timestamp);
+```
+
+### 3. ID Generation
+
+**TheGraph (OLD):**
+```typescript
+let entity = new EntityName(
+  event.transaction.hash.concatI32(event.logIndex.toI32())
+);
+```
+
+**Envio (NEW):**
+```typescript
+const entity: EntityName = {
+  id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+  // ... other fields
+};
+```
+
+### 4. Entity Storage
+
+**TheGraph (OLD):**
+```typescript
+entity.save();
+```
+
+**Envio (NEW):**
+```typescript
+context.EntityName.set(entity);
+```
+
+## Schema Migration Rules
+
+### 1. Remove @entity Decorators
+
+**OLD (TheGraph):**
+```graphql
+type Pool @entity {
+  id: ID!
+  # ...
+}
+```
+
+**NEW (Envio):**
+```graphql
+type Pool {
+  id: ID!
+  # ...
+}
+```
+
+### 2. Avoid Reserved Words in Field Names
+
+**IMPORTANT:** Avoid using reserved words as field names. Common reserved words include:
+- `action` (use `actionType` instead)
+- `type` (use `entityType` instead)
+- `order` (use `orderType` instead)
+- `group` (use `groupType` instead)
+- `user` (use `userId` instead)
+
+**Example:**
+```graphql
+# ❌ AVOID - Reserved word
+type UserAction {
+  action: ActionType!
+}
+
+# ✅ USE - Descriptive name
+type UserAction {
+  actionType: ActionType!
+}
+```
+
+### 3. Convert Raw Events to Envio Format
+
+**CONVERT raw event entities from TheGraph to Envio format:**
+
+```graphql
+# OLD (TheGraph):
+type EventEntity @entity(immutable: true) {
+  id: Bytes!
+  field1: Bytes!
+  field2: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# NEW (Envio):
+type EventEntity {
+  id: ID!
+  field1: String!
+  field2: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: String!
+}
+```
+
+**KEEP all entities from the original subgraph** but convert them to Envio format:
+- Remove `@entity` decorators
+- Change `Bytes!` to `String!`
+- Change `ID!` to `ID!` (keep as is)
+- Keep all business logic entities
+- **Rename reserved word fields** to avoid conflicts
+
+## Configuration Migration
+
+### 1. Event Selection
+
+**OLD (subgraph.yaml):**
+```yaml
+dataSources:
+  - kind: ethereum
+    source:
+      address: "0x..."
+    mapping:
+      eventHandlers:
+        - event: EventName(indexed address,indexed bool,uint256,uint256,uint256)
+```
+
+**NEW (config.yaml):**
+```yaml
+- name: Contract
+  address:
+    - "0x..."
+  handler: src/contract.ts
+  events:
+    - event: EventName(bool indexed isLender, address indexed maker, uint256 rate, uint256 ltv, uint256 amount)
+```
+
+### 2. Dynamic Contract Configuration
+
+**IMPORTANT: Dynamic contracts (created by factories) should NOT have addresses in config.yaml:**
+
+```yaml
+# ✅ CORRECT - Factory contract (has address)
+- name: Factory
+  address:
+    - 0xFactoryAddress
+  handler: src/factory.ts
+
+# ✅ CORRECT - Dynamic contract (no address - created by factory)
+- name: Pair
+  handler: src/core.ts  # No address field!
+  events:
+    - event: Mint(...)
+      handler: handleMint
+
+# ❌ WRONG - Dynamic contract should not have address
+- name: Pair
+  address:  # This will cause issues!
+    - 0xSomeAddress
+  handler: src/core.ts
+```
+
+**Why this matters:**
+- Factory contracts need addresses to know where to listen for events
+- Dynamic contracts get their addresses from factory events via `contractRegister`
+- Including addresses for dynamic contracts can cause conflicts and indexing issues
+
+This uses the human readable event name, this is pulled from the ABI file
+
+### 2. Field Selection
+
+When using transaction-level data, explicitly define field selection:
+
+```yaml
+- name: Contract
+  address:
+    - "0x..."
+  handler: src/contract.ts
+  events:
+    - event: EventName(address,bool,uint256,uint256,uint256)
+      field_selection:
+        transaction_fields:
+          - hash
+        block_fields:
+          - number
+          - timestamp
+```
+
+## Implementation Checklist
+
+### For Each Handler:
+
+1. ✅ Clear boilerplate code
+2. ✅ Reference original subgraph logic
+3. ✅ Convert entity creation pattern
+4. ✅ Update timestamp handling (BigInt)
+5. ✅ Use proper ID generation
+6. ✅ Add proper error handling
+7. ✅ Test with `pnpm tsc --noEmit`
+
+### For File Structure:
+
+1. ✅ Create directory structure (entities/, intervals/, utils/)
+2. ✅ Move handlers to contract-specific files
+3. ✅ Update config.yaml handler paths
+4. ✅ Remove original EventHandlers.ts file
+5. ✅ Run `pnpm codegen` after changes
+6. ✅ Validate with `pnpm tsc --noEmit`
+
+### For Dynamic Contract Registration:
+
+1. ✅ Identify dynamic contracts in subgraph.yaml (no address)
+2. ✅ Add `contractRegister` for factory events that create contracts
+3. ✅ Use correct `context.add<ContractName>()` method
+4. ✅ Place above the corresponding event handler
+5. ✅ **Remove `address` field from dynamic contracts in config.yaml**
+6. ✅ Test that new contracts are being tracked
+
+### For Schema Updates:
+
+1. ✅ Remove @entity decorators
+2. ✅ Convert Bytes! to String! in all entities
+3. ✅ Keep all entities from original subgraph
+4. ✅ Run `pnpm codegen` after changes
+5. ✅ Validate with `pnpm tsc --noEmit`
+
+### For Configuration:
+
+1. ✅ Convert subgraph.yaml to config.yaml format
+2. ✅ Add explicit field selection when needed
+3. ✅ Test configuration with `TUI_OFF=true pnpm dev`
+
+## Common Migration Patterns
+
+### 1. Simple Event Handler
+
+```typescript
+// Reference: original-subgraph/src/contract.ts
+Contract.EventName.handler(async ({ event, context }) => {
+  const entity: EventEntity = {
+    id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+    field1: event.params.field1,
+    field2: event.params.field2,
+    blockNumber: BigInt(event.block.number),
+    blockTimestamp: BigInt(event.block.timestamp),
+    transactionHash: event.transaction.hash,
+  };
+
+  context.EventEntity.set(entity);
+});
+```
+
+### 2. Factory Contract Registration
+
+```typescript
+// Reference: original-subgraph/src/factory.ts
+Factory.ContractCreated.contractRegister(({ event, context }) => {
+  context.addContract(event.params.contract);
+});
+
+Factory.ContractCreated.handler(async ({ event, context }) => {
+  const entity: ContractCreated = {
+    id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+    contract: event.params.contract,
+    blockNumber: BigInt(event.block.number),
+    blockTimestamp: BigInt(event.block.timestamp),
+    transactionHash: event.transaction.hash,
+  };
+
+  context.ContractCreated.set(entity);
+});
+```
+
+### 3. Complex Business Logic
+
+```typescript
+// Reference: original-subgraph/src/contract.ts
+Contract.EventName.handler(async ({ event, context }) => {
+  // Get or create entity
+  let entity = await context.Entity.get(event.params.entityId);
+  if (!entity) {
+    entity = {
+      id: event.params.entityId,
+      field1: BigInt(0),
+      field2: BigInt(0),
+      // ... other fields
+    };
+  }
+
+  // Update entity with new data
+  const updatedEntity: Entity = {
+    ...entity,
+    field1: entity.field1 + event.params.value,
+    updatedAt: BigInt(event.block.timestamp),
+  };
+
+  context.Entity.set(updatedEntity);
+
+  // Create event entity
+  const eventEntity: EventEntity = {
+    id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+    entity_id: event.params.entityId,
+    value: event.params.value,
+    blockNumber: BigInt(event.block.number),
+    blockTimestamp: BigInt(event.block.timestamp),
+    transactionHash: event.transaction.hash,
+  };
+
+  context.EventEntity.set(eventEntity);
+});
+```
+
+## Incremental Entity Implementation
+
+**Start with simple entities that don't get affected by multiple handlers:**
+
+1. **Add field selection to config.yaml** for specific events that need transaction hash:
+   ```yaml
+   - event: EventName(address indexed param1, address indexed param2)
+     field_selection:
+       transaction_fields:
+         - hash
+   ```
+
+2. **Implement handler logic** based on original subgraph:
+   ```typescript
+   // Reference: original-subgraph/src/contract.ts - handleEventName
+   Contract.EventName.handler(async ({ event, context }) => {
+     const entity: EventEntity = {
+       id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+       param1: event.params.param1,
+       param2: event.params.param2,
+       blockNumber: BigInt(event.block.number),
+       blockTimestamp: BigInt(event.block.timestamp),
+       transactionHash: event.transaction.hash,
+     };
+
+     context.EventEntity.set(entity);
+   });
+   ```
+
+3. **Remove `# to-do` comment** from schema for completed entities.
+
+4. **Validate with `pnpm codegen` and `pnpm tsc --noEmit`** after each implementation.
+
+**Batch Implementation Pattern:**
+
+For multiple similar entities, implement them all at once:
+
+1. **Add field selection for all events** that need transaction hash
+2. **Implement all handlers** following the same pattern
+3. **Remove all `# to-do` comments** for completed entities
+4. **Validate the entire batch** with codegen and TypeScript checks
+
+## Validation Commands
+
+After each change:
+
+1. `pnpm codegen` - Regenerate types after schema changes
+2. `pnpm tsc --noEmit` - Check TypeScript compilation
+3. `TUI_OFF=true pnpm dev` - Test runtime behavior
+
+## Error Handling
+
+Always include proper error handling:
+
+```typescript
+Contract.EventName.handler(async ({ event, context }) => {
+  try {
+    // Implementation here
+  } catch (error) {
+    context.log.error(`Error in EventName handler: ${error}`);
+    // Don't throw - let the indexer continue
+  }
+});
+```
+
+### 11. ERC20 Token Metadata Fetching Logic
+
+**Important Correction:** Both vault and token are ERC20 tokens, so use the same metadata fetching function:
+
+```typescript
+// CORRECT: Both vault and token are ERC20 tokens
+const [vaultMetadata, tokenMetadata] = await Promise.all([
+  getTokenMetadata(event.params.vault), // Vault is also an ERC20 token
+  getTokenMetadata(event.params.token), // Token is an ERC20 token
+]);
+
+// Use vault's ERC20 metadata for vault entity
+const vault: VaultDataEntity = {
+  id: event.params.vault,
+  name: vaultMetadata.name,        // Vault's ERC20 name
+  symbol: vaultMetadata.symbol,    // Vault's ERC20 symbol
+  decimals: BigInt(vaultMetadata.decimals), // Vault's ERC20 decimals
+  // ... other fields
+};
+```
+
+**Common Mistake to Avoid:**
+```typescript
+// ❌ WRONG: Don't create separate vault metadata functions
+// Both vault and token are ERC20 tokens, use the same function
+export async function getVaultMetadata() // This doesn't exist
+export async function getTokenMetadata() // Use this for both
+```
+
+### 12. ConvertToAssetsMultiplier Initialization
+
+**Match the original subgraph logic for initial values:**
+
+```typescript
+// OLD SUBGRAPH PATTERN:
+vaultEntry.convertToAssetsMultiplier = new BigDecimal(ONE_BD);
+
+// NEW ENVIO PATTERN:
+let convertToAssetsMultiplier = ONE_BD as any;
+// In a real implementation, you would calculate this based on vault state
+// For now, use ONE_BD to match the original subgraph logic
+```
+
+**Import the correct constants:**
+```typescript
+import { ONE_BI, ZERO_BI, ZERO_BD, ONE_BD } from "./utils/constants";
+```
+
+### 13. Environment Variables for RPC Access
+
+**Set up environment variables for contract state fetching:**
+
+```bash
+# .env file
+RPC_URL=https://rpc.ankr.com/megaeth_testnet
+```
+
+**Install required dependencies:**
+```bash
+pnpm add viem dotenv
+```
+
+**Load environment variables in contract helpers:**
+```typescript
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+// Create a public client for reading contract state
+const publicClient = createPublicClient({
+  chain: avalancheFuji,
+  transport: http(process.env.RPC_URL),
+});
+```
+
+### 14. Optimized Token Metadata Fetching
+
+**Only fetch token metadata when token doesn't exist:**
+
+```typescript
+// Get or create Token entity - only fetch token metadata if token doesn't exist
+let token = await context.Token.get(event.params.token);
+
+if (!token) {
+  // Only fetch token metadata when token doesn't exist (optimization)
+  const tokenMetadata = await getTokenMetadata(event.params.token);
+  
+  token = {
+    id: event.params.token,
+    name: tokenMetadata.name,
+    symbol: tokenMetadata.symbol,
+    decimals: BigInt(tokenMetadata.decimals),
+    // ... other fields
+  };
+  context.Token.set(token);
+}
+// If token exists, use existing data - no RPC call needed
+```
+
+### 15. Complete Contract Factory Implementation
+
+**Full example with all optimizations:**
+
+```typescript
+ContractFactory.ContractCreated.handler(async ({ event, context }) => {
+  try {
+    // Get or create ContractFactory entity
+    let contractFactory = await context.ContractFactory.get(ONE_BI.toString());
+    if (!contractFactory) {
+      contractFactory = {
+        id: ONE_BI.toString(),
+        totalContracts: ZERO_BI,
+        timestamp: BigInt(event.block.timestamp),
+        lastUpdate: BigInt(event.block.timestamp),
+      };
+    }
+
+    // Update contract factory stats
+    const updatedContractFactory = {
+      ...contractFactory,
+      totalContracts: contractFactory.totalContracts + ONE_BI,
+      lastUpdate: BigInt(event.block.timestamp),
+    };
+    context.ContractFactory.set(updatedContractFactory);
+
+    // Fetch ERC20 metadata for both contract and token (parallel)
+    const [contractMetadata, tokenMetadata] = await Promise.all([
+      getTokenMetadata(event.params.contract), // Contract is also an ERC20 token
+      getTokenMetadata(event.params.token), // Token is an ERC20 token
+    ]);
+    
+    // Create ContractDataEntity with contract's ERC20 metadata
+    const contract: ContractDataEntity = {
+      id: event.params.contract,
+      name: contractMetadata.name, // Use contract's ERC20 metadata
+      symbol: contractMetadata.symbol, // Use contract's ERC20 metadata
+      decimals: BigInt(contractMetadata.decimals), // Use contract's ERC20 decimals
+      manager: event.params.poolManager,
+      timestamp: BigInt(event.block.timestamp),
+      lastUpdate: BigInt(event.block.timestamp),
+      fee: ZERO_BI,
+      depositApy: ZERO_BI, // Will be calculated later
+      convertToAssetsMultiplier: ONE_BD as any, // Match original subgraph logic
+      totalDepositsVolume: ZERO_BI,
+      totalWithdrawalsVolume: ZERO_BI,
+      totalAssets: ZERO_BI, // Will be updated later
+      totalShares: ZERO_BI, // Will be updated later
+      token_id: event.params.token,
+      contractFactory_id: ONE_BI.toString(),
+    };
+
+    // Get or create Token entity - only fetch if doesn't exist
+    let token = await context.Token.get(event.params.token);
+    
+    if (!token) {
+      // Only fetch token metadata when token doesn't exist (optimization)
+      token = {
+        id: event.params.token,
+        name: tokenMetadata.name,
+        symbol: tokenMetadata.symbol,
+        decimals: BigInt(tokenMetadata.decimals),
+        rate: ZERO_BD as any,
+        dataFeedId: event.params.token,
+        updatedAt: BigInt(event.block.timestamp),
+        blockNumber: BigInt(event.block.number),
+        blockTimestamp: BigInt(event.block.timestamp),
+        transactionHash: event.transaction.hash,
+        address: event.params.token,
+      };
+      context.Token.set(token);
+    }
+
+    // Set convertToAssetsMultiplier to ONE_BD (match original subgraph)
+    const updatedContract: ContractDataEntity = {
+      ...contract,
+      convertToAssetsMultiplier: ONE_BD as any,
+    };
+
+    context.ContractDataEntity.set(updatedContract);
+
+  } catch (error) {
+    console.error(`Error in VaultCreated handler: ${error}`);
+    // Don't throw - let the indexer continue
+  }
+});
+```
+
+### 16. Network Configuration
+
+**Configure the correct network for your indexer:**
+
+```typescript
+// Create a public client for reading contract state
+// Using MegaETH testnet (network ID 6342)
+const publicClient = createPublicClient({
+  chain: {
+    id: 6342,
+    name: 'MegaETH Testnet',
+    network: 'megaeth-testnet',
+    nativeCurrency: {
+      decimals: 18,
+      name: 'MegaETH',
+      symbol: 'METH',
+    },
+    rpcUrls: {
+      default: {
+        http: [process.env.RPC_URL || 'https://rpc.ankr.com/megaeth_testnet'],
+      },
+      public: {
+        http: [process.env.RPC_URL || 'https://rpc.ankr.com/megaeth_testnet'],
+      },
+    },
+  },
+  transport: http(process.env.RPC_URL),
+});
+```
+
+**Set up environment variables:**
+```bash
+# .env file
+RPC_URL=https://rpc.ankr.com/megaeth_testnet
+```
+
+**Load environment variables:**
+```typescript
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+```
+
+**Common Network IDs:**
+- MegaETH Testnet: 6342
+- Ethereum Mainnet: 1
+- Avalanche Fuji: 43113
+- Polygon Mumbai: 80001
+
+**Check your config.yaml for the correct network ID:**
+```yaml
+networks:
+- id: 6342  # This determines which network to use
+  start_block: 0
+```
+
+### 17. Factory Contract Migration Pattern
+
+**Implement factory contract handlers with address filtering and entity creation:**
+
+```typescript
+// Reference: original-subgraph/src/factory.ts - handleContractCreated
+Factory.ContractCreated.handler(async ({ event, context }) => {
+  try {
+    // Skip specific addresses (from original subgraph logic)
+    const contractAddress = event.params.contract.toLowerCase();
+    if (
+      contractAddress === "0xSpecificAddress1" ||
+      contractAddress === "0xSpecificAddress2"
+    ) {
+      context.log.info(`Skip datasource from wrong param ${contractAddress}`);
+      return;
+    }
+
+    context.log.info(`handleContractCreated ${contractAddress}`);
+
+    // Create event entity with correct ID (from original subgraph)
+    const entity: ContractCreated = {
+      id: event.params.contract, // Use contract address as ID like original subgraph
+      param1: event.params.param1,
+      param2: event.params.param2,
+      contract: event.params.contract,
+      blockNumber: BigInt(event.block.number),
+      blockTimestamp: BigInt(event.block.timestamp),
+      transactionHash: event.transaction.hash,
+    };
+
+    context.ContractCreated.set(entity);
+
+    // Get or create related entities (example: tokens)
+    let relatedEntity = await context.RelatedEntity.get(event.params.relatedParam);
+    if (!relatedEntity) {
+      try {
+        const metadata = await getEntityMetadata(event.params.relatedParam);
+        
+        context.log.info(
+          `CONTRACT CREATED :: FOR RELATED ENTITY ADDRESS:${event.params.relatedParam} NAME:${metadata.name} SYMBOL:${metadata.symbol}`
+        );
+
+        const newRelatedEntity: RelatedEntity = {
+          id: event.params.relatedParam,
+          name: metadata.name,
+          symbol: metadata.symbol,
+          // ... other fields
+          blockNumber: BigInt(event.block.number),
+          blockTimestamp: BigInt(event.block.timestamp),
+          transactionHash: event.transaction.hash,
+        };
+        context.RelatedEntity.set(newRelatedEntity);
+      } catch (error) {
+        context.log.error(`Error fetching metadata for ${event.params.relatedParam}: ${error}`);
+      }
+    }
+
+  } catch (error) {
+    context.log.error(`Error in ContractCreated handler: ${error}`);
+    // Don't throw - let the indexer continue
+  }
+});
+```
+
+**Key Features:**
+1. **Address Filtering**: Skip specific addresses from original subgraph logic
+2. **Contract Registration**: Register new contracts using `context.addContract()`
+3. **Correct Entity ID**: Use event parameter as ID (matches original subgraph pattern)
+4. **Immutable Object Handling**: Create new objects instead of modifying read-only ones
+5. **Metadata Fetching**: Fetch contract state for related entities
+6. **Conditional Entity Creation**: Only create entities if they don't exist (optimization)
+7. **Proper Logging**: Use `context.log.info` and `context.log.error` instead of `console.log`
+8. **Error Handling**: Proper error handling for RPC calls
+
+**Important Patterns:**
+- **Entity ID**: Use `event.params.contract` instead of `${event.chainId}_${event.transaction.hash}_${event.logIndex}`
+- **Immutable Objects**: Create new objects (`newRelatedEntity`) instead of modifying read-only ones
+- **Logging**: Use `context.log.info` and `context.log.error` for proper Envio logging
+
+**Configuration Requirements:**
+```yaml
+# config.yaml
+- event: ContractCreated(address indexed param1, address indexed param2, address contract)
+  field_selection:
+    transaction_fields:
+      - hash
+```
+
+### 18. Logging Best Practices
+
+**Use Envio's logging system instead of console.log:**
+
+```typescript
+// ❌ AVOID - Console logging
+console.log(`Processing event: ${event.params.value}`);
+console.error(`Error: ${error}`);
+
+// ✅ USE - Envio logging
+context.log.info(`Processing event: ${event.params.value}`);
+context.log.error(`Error: ${error}`);
+context.log.warn(`Warning: ${warning}`);
+context.log.debug(`Debug info: ${debugInfo}`);
+```
+
+**Available Logging Methods:**
+- `context.log.info()` - General information
+- `context.log.error()` - Error messages
+- `context.log.warn()` - Warning messages
+- `context.log.debug()` - Debug information
+
+### 19. Immutable Object Handling
+
+**When working with entities from context, create new objects:**
+
+```typescript
+// ❌ AVOID - Modifying read-only objects
+let entity = await context.Entity.get(id);
+if (entity) {
+  entity.field = newValue; // This will fail - object is immutable
+  context.Entity.set(entity);
+}
+
+// ✅ USE - Create new objects with spread operator
+let entity = await context.Entity.get(id);
+if (entity) {
+  const updatedEntity: Entity = {
+    ...entity, // Spread existing properties
+    field: newValue, // Add new/modified properties
+    updatedAt: BigInt(event.block.timestamp),
+  };
+  context.Entity.set(updatedEntity);
+}
+```
+
+**For New Entity Creation:**
+```typescript
+// ✅ CORRECT - Create new entity object
+const newEntity: Entity = {
+  id: event.params.id,
+  field1: event.params.field1,
+  field2: event.params.field2,
+  // ... other fields
+};
+context.Entity.set(newEntity);
+```
+
+### 20. Multiple Events with Same Name
+
+**When a contract has multiple events with the same name but different signatures, use aliases:**
+
+```yaml
+# config.yaml
+- name: Contract
+  handler: src/contract.ts
+  events:
+    # First event with default name
+    - event: EventName(address indexed param1, address indexed param2, uint256 value)
+      field_selection:
+        transaction_fields:
+          - hash
+    # Second event with same name but different signature - use alias
+    - event: EventName(address indexed param3, address param4, uint256 value)
+      name: EventNameAlias
+      field_selection:
+        transaction_fields:
+          - hash
+```
+
+**Handler Implementation:**
+```typescript
+// First event handler
+Contract.EventName.handler(async ({ event, context }) => {
+  const entity: EventEntity = {
+    id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+    param1: event.params.param1,
+    param2: event.params.param2,
+    value: event.params.value,
+    blockNumber: BigInt(event.block.number),
+    blockTimestamp: BigInt(event.block.timestamp),
+    transactionHash: event.transaction.hash,
+  };
+  context.EventEntity.set(entity);
+});
+
+// Second event handler with alias
+Contract.EventNameAlias.handler(async ({ event, context }) => {
+  const entity: EventEntity = {
+    id: `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+    param3: event.params.param3,
+    param4: event.params.param4,
+    value: event.params.value,
+    blockNumber: BigInt(event.block.number),
+    blockTimestamp: BigInt(event.block.timestamp),
+    transactionHash: event.transaction.hash,
+  };
+  context.EventEntity.set(entity);
+});
+```
+
+**Key Points:**
+1. **Use `name` field** in config.yaml to create aliases for events with same name
+2. **Different signatures** require different handlers
+3. **Same entity type** can be used if the data structure is similar
+4. **Field selection** must be specified for each event that needs transaction data
+5. **Regenerate types** after adding new events with `pnpm codegen`
+
+**Example: Pool Withdraw Events**
+```yaml
+# First Withdraw event (standard ERC4626)
+- event: Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)
+
+# Second Withdraw event (pool-specific)
+- event: Withdraw(address indexed poolAddress, address caller, address indexed receiver, uint256 assets, uint256 shares)
+  name: WithdrawPool
+  field_selection:
+    transaction_fields:
+      - hash
+```
+

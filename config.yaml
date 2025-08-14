@@ -1,0 +1,86 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+name: envio-indexer
+contracts:
+- name: Factory
+  handler: src/EventHandlers.ts
+  events:
+  - event: PairCreated(address indexed token0, address indexed token1, address pair, uint256 )
+networks:
+- id: 1
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+  - name: Pair
+    address:
+    - 0xE26Dd94F67ca3615FCaf6062750147f37DF84f7B
+    handler: src/EventHandlers.ts
+    events:
+    - event: Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)
+    - event: Mint(address indexed sender, uint256 amount0, uint256 amount1)
+    - event: Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)
+    - event: Sync(uint112 reserve0, uint112 reserve1)
+    - event: Transfer(address indexed from, address indexed to, uint256 value)
+- id: 10
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf
+- id: 56
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6
+- id: 130
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x1F98400000000000000000000000000000000002
+- id: 137
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32
+- id: 480
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+- id: 1868
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x97FeBbC2AdBD5644ba22736E962564B23F5828CE
+- id: 8453
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6
+- id: 42161
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9
+- id: 43114
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10
+- id: 81457
+  start_block: 0
+  contracts:
+  - name: Factory
+    address:
+    - 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+unordered_multichain_mode: true
+preload_handlers: true

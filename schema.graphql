@@ -1,0 +1,46 @@
+type Factory_PairCreated {
+  id: ID!
+  token0: String!
+  token1: String!
+  pair: String!
+  _3: BigInt!
+}
+
+type Pair_Burn {
+  id: ID!
+  sender: String!
+  amount0: BigInt!
+  amount1: BigInt!
+  to: String!
+}
+
+type Pair_Mint {
+  id: ID!
+  sender: String!
+  amount0: BigInt!
+  amount1: BigInt!
+}
+
+type Pair_Swap {
+  id: ID!
+  sender: String!
+  amount0In: BigInt!
+  amount1In: BigInt!
+  amount0Out: BigInt!
+  amount1Out: BigInt!
+  to: String!
+}
+
+type Pair_Sync {
+  id: ID!
+  reserve0: BigInt!
+  reserve1: BigInt!
+}
+
+type Pair_Transfer {
+  id: ID!
+  from: String!
+  to: String!
+  value: BigInt!
+}
+
