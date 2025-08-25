@@ -18,7 +18,7 @@ export function safeDiv(amount0: BigDecimal, amount1: BigDecimal): BigDecimal {
  * Get ETH price in USD using stable token pairs
  * Keeps the original logic for reliable pricing
  */
-export function getEthPriceInUSD(context: any): BigDecimal {
+export async function getEthPriceInUSD(context: any): Promise<BigDecimal> {
   // Create arrays to store stable token pair data
   let stableTokenPairs = new Array<any>(STABLE_TOKEN_PAIRS.length);
   let stableTokenReserves = new Array<BigDecimal>(STABLE_TOKEN_PAIRS.length);
@@ -28,7 +28,7 @@ export function getEthPriceInUSD(context: any): BigDecimal {
 
   // Load stable token pairs and calculate total liquidity
   for (let i = 0; i < STABLE_TOKEN_PAIRS.length; i++) {
-    const stableTokenPair = context.Pair.get(STABLE_TOKEN_PAIRS[i]);
+    const stableTokenPair = await context.Pair.get(STABLE_TOKEN_PAIRS[i]);
     if (stableTokenPair) {
       stableTokenIsToken0[i] = stableTokenPair.token1_id === REFERENCE_TOKEN;
       if (stableTokenIsToken0[i]) {
@@ -47,7 +47,7 @@ export function getEthPriceInUSD(context: any): BigDecimal {
   // Calculate weighted average price
   let tokenPrice = ZERO_BD;
   for (let i = 0; i < STABLE_TOKEN_PAIRS.length; i++) {
-    if (stableTokenPairs[i] !== null) {
+    if (stableTokenPairs[i] !== null && stableTokenPrices[i] && stableTokenReserves[i]) {
       tokenPrice = tokenPrice.plus(stableTokenPrices[i].times(safeDiv(stableTokenReserves[i], totalLiquidityETH)));
     }
   }
@@ -58,7 +58,7 @@ export function getEthPriceInUSD(context: any): BigDecimal {
  * Get tracked volume USD - simplified version without whitelisting
  * Processes ALL pairs but keeps data quality thresholds
  */
-export function getTrackedVolumeUSD(
+export async function getTrackedVolumeUSD(
   tokenAmount0: BigDecimal,
   token0: any,
   tokenAmount1: BigDecimal,
@@ -66,9 +66,14 @@ export function getTrackedVolumeUSD(
   pair: any,
   context: any,
   chainId: number
-): BigDecimal {
-  const bundle = context.Bundle.get(`${chainId}-1`);
+): Promise<BigDecimal> {
+  const bundle = await context.Bundle.get(`${chainId}-1`);
   if (!bundle || !bundle.ethPrice) {
+    return ZERO_BD;
+  }
+
+  // Add null checks for derivedETH values
+  if (!token0.derivedETH || !token1.derivedETH) {
     return ZERO_BD;
   }
 
@@ -96,16 +101,21 @@ export function getTrackedVolumeUSD(
  * Get tracked liquidity USD - simplified version without whitelisting
  * Processes ALL pairs but keeps data quality thresholds
  */
-export function getTrackedLiquidityUSD(
+export async function getTrackedLiquidityUSD(
   tokenAmount0: BigDecimal,
   tokenAmount1: BigDecimal,
   token0: any,
   token1: any,
   context: any,
   chainId: number
-): BigDecimal {
-  const bundle = context.Bundle.get(`${chainId}-1`);
+): Promise<BigDecimal> {
+  const bundle = await context.Bundle.get(`${chainId}-1`);
   if (!bundle || !bundle.ethPrice) {
+    return ZERO_BD;
+  }
+
+  // Add null checks for derivedETH values
+  if (!token0.derivedETH || !token1.derivedETH) {
     return ZERO_BD;
   }
 
@@ -120,16 +130,21 @@ export function getTrackedLiquidityUSD(
 /**
  * Get token tracked liquidity USD - simplified version without whitelisting
  */
-export function getTokenTrackedLiquidityUSD(
+export async function getTokenTrackedLiquidityUSD(
   tokenForPricing: any,
   tokenForPricingAmount: BigDecimal,
   companionTokenAmount: BigDecimal,
   companionToken: any,
   context: any,
   chainId: number
-): BigDecimal {
-  const bundle = context.Bundle.get(`${chainId}-1`);
+): Promise<BigDecimal> {
+  const bundle = await context.Bundle.get(`${chainId}-1`);
   if (!bundle || !bundle.ethPrice) {
+    return ZERO_BD;
+  }
+
+  // Add null checks for derivedETH values
+  if (!tokenForPricing.derivedETH || !companionToken.derivedETH) {
     return ZERO_BD;
   }
 
@@ -146,13 +161,13 @@ export function getTokenTrackedLiquidityUSD(
  * Implements the complete logic from original subgraph using WHITELIST for pricing accuracy
  * Uses PairTokenLookup entities to find reliable pricing sources
  */
-export function findEthPerToken(token: any, context: any, chainId: number): BigDecimal {
+export async function findEthPerToken(token: any, context: any, chainId: number): Promise<BigDecimal> {
   if (token.id === REFERENCE_TOKEN) {
     return ONE_BD;
   }
 
   // Load bundle for ETH price
-  const bundle = context.Bundle.get(`${chainId}-1`);
+  const bundle = await context.Bundle.get(`${chainId}-1`);
   if (!bundle) {
     return ZERO_BD;
   }
@@ -166,16 +181,16 @@ export function findEthPerToken(token: any, context: any, chainId: number): BigD
   // This ensures we only use reliable pricing sources for data accuracy
   for (let i = 0; i < WHITELIST.length; ++i) {
     const pairLookupId = token.id.concat('-').concat(WHITELIST[i]);
-    const pairLookup = context.PairTokenLookup.get(pairLookupId);
+    const pairLookup = await context.PairTokenLookup.get(pairLookupId);
     
     if (pairLookup) {
       const pairId = pairLookup.pair_id;
       if (pairId !== ADDRESS_ZERO) {
-        const pair = context.Pair.get(pairId);
+        const pair = await context.Pair.get(pairId);
         if (pair) {
           // Check if token0 is our token and has sufficient liquidity
           if (pair.token0_id === token.id && pair.reserveETH.isGreaterThan(MINIMUM_LIQUIDITY_THRESHOLD_ETH)) {
-            const token1 = context.Token.get(pair.token1_id);
+            const token1 = await context.Token.get(pair.token1_id);
             if (token1) {
               // Return token1 per our token * ETH per token1
               return pair.token1Price.times(token1.derivedETH);
@@ -183,7 +198,7 @@ export function findEthPerToken(token: any, context: any, chainId: number): BigD
           }
           // Check if token1 is our token and has sufficient liquidity
           if (pair.token1_id === token.id && pair.reserveETH.isGreaterThan(MINIMUM_LIQUIDITY_THRESHOLD_ETH)) {
-            const token0 = context.Token.get(pair.token0_id);
+            const token0 = await context.Token.get(pair.token0_id);
             if (token0) {
               // Return token0 per our token * ETH per token0
               return pair.token0Price.times(token0.derivedETH);

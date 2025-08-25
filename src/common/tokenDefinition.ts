@@ -52,7 +52,7 @@ export const STATIC_TOKEN_DEFINITIONS: TokenDefinition[] = [
 export const SKIP_TOTAL_SUPPLY: string[] = ['0x0000000000bf2686748e1c0255036e7617e7e8a5'];
 
 // Helper for hardcoded tokens
-export const getStaticDefinition = (tokenAddress: string): TokenDefinition | null => {
+export const getStaticDefinition = (tokenAddress: string): TokenDefinition | undefined => {
   const tokenAddressLower = tokenAddress.toLowerCase();
 
   // Search the definition using the address
@@ -63,6 +63,6 @@ export const getStaticDefinition = (tokenAddress: string): TokenDefinition | nul
     }
   }
 
-  // If not found, return null
-  return null;
+  // If not found, return undefined
+  return undefined;
 }

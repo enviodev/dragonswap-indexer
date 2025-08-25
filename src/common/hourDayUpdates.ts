@@ -2,337 +2,281 @@
 // Reference: original-subgraph/src/common/hourDayUpdates.ts
 // All helper functions have been implemented below
 
-import { ZERO_BD, ZERO_BI, ONE_BI, FACTORY_ADDRESS } from './constants';
-import { BigDecimal } from 'generated';
+import { BigDecimal } from "generated";
+import { FACTORY_ADDRESS, ZERO_BD, ZERO_BI } from "./constants";
+import {
+  UniswapFactory_t,
+  UniswapDayData_t,
+  PairDayData_t,
+  PairHourData_t,
+  TokenDayData_t,
+  TokenHourData_t,
+  Token_t,
+  Bundle_t,
+} from "generated/src/db/Entities.gen";
 
-/**
- * Update Uniswap day data - global daily statistics
- * Creates or updates daily aggregated data for the entire protocol
- */
-export function updateUniswapDayData(event: any, context: any, chainId: number): any {
-  // Load factory entity
-  const uniswap = context.UniswapFactory.get(FACTORY_ADDRESS);
+export async function updateUniswapDayData(
+  event: any,
+  context: any,
+  chainId: string
+): Promise<UniswapDayData_t> {
+  const uniswap = await context.UniswapFactory.get(FACTORY_ADDRESS);
   if (!uniswap) {
-    context.log.error('Factory not found for updateUniswapDayData');
-    return null;
+    throw new Error('Factory not found for updateUniswapDayData');
   }
 
-  // Calculate day ID and timestamp
-  const timestamp = event.block.timestamp;
-  const dayID = Math.floor(Number(timestamp) / 86400);
+  const timestamp = Number(event.block.timestamp);
+  const dayID = Math.floor(timestamp / 86400);
   const dayStartTimestamp = dayID * 86400;
+  let uniswapDayData = await context.UniswapDayData.get(`${chainId}-${dayID}`);
 
-  // Try to load existing day data
-  let uniswapDayData = context.UniswapDayData.get(`${chainId}-${dayID}`);
-  
   if (!uniswapDayData) {
-    // Create new day data entity
     uniswapDayData = {
       id: `${chainId}-${dayID}`,
-      date: dayStartTimestamp,
-      dailyVolumeETH: ZERO_BD,
+      date: BigInt(dayStartTimestamp),
       dailyVolumeUSD: ZERO_BD,
-      dailyVolumeUntracked: ZERO_BD,
-      totalVolumeETH: ZERO_BD,
+      dailyVolumeETH: ZERO_BD,
       totalVolumeUSD: ZERO_BD,
-      totalLiquidityETH: ZERO_BD,
+      totalVolumeETH: ZERO_BD,
+      dailyVolumeUntracked: ZERO_BD,
       totalLiquidityUSD: ZERO_BD,
+      totalLiquidityETH: ZERO_BD,
       txCount: ZERO_BI,
     };
   }
 
-  // Update with current factory data
   uniswapDayData.totalLiquidityUSD = uniswap.totalLiquidityUSD;
   uniswapDayData.totalLiquidityETH = uniswap.totalLiquidityETH;
   uniswapDayData.txCount = uniswap.txCount;
-
-  // Save the entity
   context.UniswapDayData.set(uniswapDayData);
 
   return uniswapDayData;
 }
 
-/**
- * Update pair day data - daily statistics for specific pairs
- * Creates or updates daily aggregated data for individual trading pairs
- */
-export function updatePairDayData(pair: any, event: any, context: any, chainId: number): any {
-  // Calculate day ID and timestamp
-  const timestamp = event.block.timestamp;
-  const dayID = Math.floor(Number(timestamp) / 86400);
+export async function updatePairDayData(
+  pair: any,
+  event: any,
+  context: any,
+  chainId: string
+): Promise<any> {
+  const timestamp = Number(event.block.timestamp);
+  const dayID = Math.floor(timestamp / 86400);
   const dayStartTimestamp = dayID * 86400;
-  
-  // Create unique ID for pair-day combination
   const dayPairID = `${chainId}-${event.srcAddress}-${dayID}`;
-  
-  // Try to load existing day data
-  let pairDayData = context.PairDayData.get(dayPairID);
-  
+  let pairDayData = await context.PairDayData.get(dayPairID);
+
   if (!pairDayData) {
-    // Create new day data entity
     pairDayData = {
       id: dayPairID,
-      date: dayStartTimestamp,
+      date: BigInt(dayStartTimestamp),
+      token0: pair.token0_id,
+      token1: pair.token1_id,
       pairAddress: event.srcAddress,
-      token0_id: pair.token0_id,
-      token1_id: pair.token1_id,
       dailyVolumeToken0: ZERO_BD,
       dailyVolumeToken1: ZERO_BD,
       dailyVolumeUSD: ZERO_BD,
       dailyTxns: ZERO_BI,
+      totalSupply: ZERO_BD,
       reserve0: ZERO_BD,
       reserve1: ZERO_BD,
-      totalSupply: ZERO_BD,
       reserveUSD: ZERO_BD,
     };
   }
 
-  // Update with current pair data
   pairDayData.totalSupply = pair.totalSupply;
   pairDayData.reserve0 = pair.reserve0;
   pairDayData.reserve1 = pair.reserve1;
   pairDayData.reserveUSD = pair.reserveUSD;
-  pairDayData.dailyTxns = pairDayData.dailyTxns + ONE_BI;
-
-  // Save the entity
+  pairDayData.dailyTxns = pairDayData.dailyTxns + BigInt(1);
   context.PairDayData.set(pairDayData);
 
   return pairDayData;
 }
 
-/**
- * Update pair hour data - hourly statistics for specific pairs
- * Creates or updates hourly aggregated data for individual trading pairs
- */
-export function updatePairHourData(pair: any, event: any, context: any, chainId: number): any {
-  // Calculate hour index and timestamp
-  const timestamp = event.block.timestamp;
-  const hourIndex = Math.floor(Number(timestamp) / 3600); // get unique hour within unix history
-  const hourStartUnix = hourIndex * 3600; // want the rounded effect
-  
-  // Create unique ID for pair-hour combination
+export async function updatePairHourData(
+  pair: any,
+  event: any,
+  context: any,
+  chainId: string
+): Promise<any> {
+  const timestamp = Number(event.block.timestamp);
+  const hourIndex = Math.floor(timestamp / 3600);
+  const hourStartUnix = hourIndex * 3600;
   const hourPairID = `${chainId}-${event.srcAddress}-${hourIndex}`;
-  
-  // Try to load existing hour data
-  let pairHourData = context.PairHourData.get(hourPairID);
-  
+  let pairHourData = await context.PairHourData.get(hourPairID);
+
   if (!pairHourData) {
-    // Create new hour data entity
     pairHourData = {
       id: hourPairID,
-      hourStartUnix: hourStartUnix,
-      pair_id: event.srcAddress,
+      hourStartUnix: BigInt(hourStartUnix),
+      pair: event.srcAddress,
       hourlyVolumeToken0: ZERO_BD,
       hourlyVolumeToken1: ZERO_BD,
       hourlyVolumeUSD: ZERO_BD,
       hourlyTxns: ZERO_BI,
+      totalSupply: ZERO_BD,
       reserve0: ZERO_BD,
       reserve1: ZERO_BD,
-      totalSupply: ZERO_BD,
       reserveUSD: ZERO_BD,
     };
   }
 
-  // Update with current pair data
   pairHourData.totalSupply = pair.totalSupply;
   pairHourData.reserve0 = pair.reserve0;
   pairHourData.reserve1 = pair.reserve1;
   pairHourData.reserveUSD = pair.reserveUSD;
-  pairHourData.hourlyTxns = pairHourData.hourlyTxns + ONE_BI;
-
-  // Save the entity
+  pairHourData.hourlyTxns = pairHourData.hourlyTxns + BigInt(1);
   context.PairHourData.set(pairHourData);
 
   return pairHourData;
 }
 
-/**
- * Update token day data - daily statistics for specific tokens
- * Creates or updates daily aggregated data for individual tokens
- */
-export function updateTokenDayData(token: any, event: any, context: any, chainId: number): any {
-  // Load bundle for ETH price
-  const bundle = context.Bundle.get(`${chainId}-1`);
+export async function updateTokenDayData(
+  token: any,
+  event: any,
+  context: any,
+  chainId: string
+): Promise<any> {
+  const bundle = await context.Bundle.get(`${chainId}-1`);
   if (!bundle) {
-    context.log.error('Bundle not found for updateTokenDayData');
-    return null;
+    throw new Error('Bundle not found for updateTokenDayData');
   }
 
-  // Calculate day ID and timestamp
-  const timestamp = event.block.timestamp;
-  const dayID = Math.floor(Number(timestamp) / 86400);
+  const timestamp = Number(event.block.timestamp);
+  const dayID = Math.floor(timestamp / 86400);
   const dayStartTimestamp = dayID * 86400;
-  
-  // Create unique ID for token-day combination
   const tokenDayID = `${chainId}-${token.id}-${dayID}`;
-  
-  // Try to load existing day data
-  let tokenDayData = context.TokenDayData.get(tokenDayID);
-  
+  let tokenDayData = await context.TokenDayData.get(tokenDayID);
+
   if (!tokenDayData) {
-    // Create new day data entity
     tokenDayData = {
       id: tokenDayID,
-      date: dayStartTimestamp,
-      token_id: token.id,
-      priceUSD: token.derivedETH.times(bundle.ethPrice),
+      date: BigInt(dayStartTimestamp),
+      token: token.id,
+      priceUSD: token.derivedETH * bundle.ethPrice,
       dailyVolumeToken: ZERO_BD,
       dailyVolumeETH: ZERO_BD,
       dailyVolumeUSD: ZERO_BD,
       dailyTxns: ZERO_BI,
+      totalLiquidityUSD: ZERO_BD,
       totalLiquidityToken: ZERO_BD,
       totalLiquidityETH: ZERO_BD,
-      totalLiquidityUSD: ZERO_BD,
     };
   }
 
-  // Update with current token data
-  tokenDayData.priceUSD = token.derivedETH.times(bundle.ethPrice);
+  tokenDayData.priceUSD = token.derivedETH * bundle.ethPrice;
   tokenDayData.totalLiquidityToken = token.totalLiquidity;
-  tokenDayData.totalLiquidityETH = token.totalLiquidity.times(token.derivedETH);
-  tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityETH.times(bundle.ethPrice);
-  tokenDayData.dailyTxns = tokenDayData.dailyTxns + ONE_BI;
-
-  // Save the entity
+  tokenDayData.totalLiquidityETH = token.totalLiquidity * token.derivedETH;
+  tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityETH * bundle.ethPrice;
+  tokenDayData.dailyTxns = tokenDayData.dailyTxns + BigInt(1);
   context.TokenDayData.set(tokenDayData);
 
   return tokenDayData;
 }
 
-/**
- * Update token hour data - hourly statistics for specific tokens
- * Creates or updates hourly aggregated data for individual tokens
- */
-export function updateTokenHourData(token: any, event: any, context: any, chainId: number): any {
-  // Load bundle for ETH price
-  const bundle = context.Bundle.get(`${chainId}-1`);
+export async function updateTokenHourData(
+  token: any,
+  event: any,
+  context: any,
+  chainId: string
+): Promise<any> {
+  const bundle = await context.Bundle.get(`${chainId}-1`);
   if (!bundle) {
-    context.log.error('Bundle not found for updateTokenHourData');
-    return null;
+    throw new Error('Bundle not found for updateTokenHourData');
   }
 
-  // Calculate hour index and timestamp
-  const timestamp = event.block.timestamp;
-  const hourIndex = Math.floor(Number(timestamp) / 3600); // get unique hour within unix history
-  const hourStartUnix = hourIndex * 3600; // want the rounded effect
-  
-  // Create unique ID for token-hour combination
+  const timestamp = Number(event.block.timestamp);
+  const hourIndex = Math.floor(timestamp / 3600);
+  const hourStartUnix = hourIndex * 3600;
   const tokenHourID = `${chainId}-${token.id}-${hourIndex}`;
-  
-  // Try to load existing hour data
-  let tokenHourData = context.TokenHourData.get(tokenHourID);
-  
-  const tokenPrice = token.derivedETH.times(bundle.ethPrice);
+  let tokenHourData = await context.TokenHourData.get(tokenHourID);
+  const tokenPrice = token.derivedETH * bundle.ethPrice;
   let isNew = false;
-  
+
   if (!tokenHourData) {
-    // Create new hour data entity
     tokenHourData = {
       id: tokenHourID,
-      periodStartUnix: hourStartUnix,
-      token_id: token.id,
+      periodStartUnix: BigInt(hourStartUnix),
+      token: token.id,
       volume: ZERO_BD,
       volumeUSD: ZERO_BD,
       untrackedVolumeUSD: ZERO_BD,
-      totalValueLocked: ZERO_BD,
-      totalValueLockedUSD: ZERO_BD,
       feesUSD: ZERO_BD,
       openPrice: tokenPrice,
       highPrice: tokenPrice,
       lowPrice: tokenPrice,
       closePrice: tokenPrice,
       priceUSD: tokenPrice,
+      totalValueLocked: ZERO_BD,
+      totalValueLockedUSD: ZERO_BD,
     };
+
+    const tokenHourArray = [...token.hourArray, hourIndex];
+    const updatedToken = {
+      ...token,
+      hourArray: tokenHourArray,
+    };
+    context.Token.set(updatedToken);
     isNew = true;
   }
 
-  // Update price statistics
-  if (tokenPrice.isGreaterThan(tokenHourData.highPrice)) {
+  if (tokenPrice > tokenHourData.highPrice) {
     tokenHourData.highPrice = tokenPrice;
   }
 
-  if (tokenPrice.isLessThan(tokenHourData.lowPrice)) {
+  if (tokenPrice < tokenHourData.lowPrice) {
     tokenHourData.lowPrice = tokenPrice;
   }
 
   tokenHourData.closePrice = tokenPrice;
   tokenHourData.priceUSD = tokenPrice;
-  
-  // For now, set these to 0 as they require more complex logic
-  tokenHourData.totalValueLocked = ZERO_BD;
-  tokenHourData.totalValueLockedUSD = ZERO_BD;
-
-  // Save the entity
   context.TokenHourData.set(tokenHourData);
 
-  // Update token hour tracking fields
-  if (token.lastHourArchived === ZERO_BI && token.lastHourRecorded === ZERO_BI) {
-    token.lastHourRecorded = BigInt(hourIndex);
-    token.lastHourArchived = BigInt(hourIndex - 1);
+  if (token.lastHourArchived === BigInt(0) && token.lastHourRecorded === BigInt(0)) {
+    const updatedToken = {
+      ...token,
+      lastHourRecorded: BigInt(hourIndex),
+      lastHourArchived: BigInt(hourIndex - 1),
+    };
+    context.Token.set(updatedToken);
   }
 
   if (isNew) {
     const lastHourArchived = Number(token.lastHourArchived);
-    const stop = hourIndex - 768; // Archive data older than 768 hours (32 days)
+    const stop = hourIndex - 768;
     if (stop > lastHourArchived) {
-      archiveHourData(token, stop, context, chainId);
+      await archiveHourData(token, stop, context, chainId);
     }
-    token.lastHourRecorded = BigInt(hourIndex);
-    
-    // Update token's hourArray
-    if (!token.hourArray) {
-      token.hourArray = [];
-    }
-    token.hourArray.push(hourIndex);
-    
-    // Save the updated token
-    context.Token.set(token);
+    const updatedToken = {
+      ...token,
+      lastHourRecorded: BigInt(hourIndex),
+    };
+    context.Token.set(updatedToken);
   }
 
   return tokenHourData;
 }
 
-/**
- * Archive old hour data to prevent database bloat
- * Removes TokenHourData entities older than the specified hour
- */
-function archiveHourData(token: any, end: number, context: any, chainId: number): void {
-  if (!token.hourArray || token.hourArray.length === 0) {
-    return;
-  }
+async function archiveHourData(
+  token: any,
+  stop: number,
+  context: any,
+  chainId: string
+): Promise<void> {
+  const length = token.hourArray.length;
+  const array = [...token.hourArray];
+  const modArray = [...token.hourArray];
 
-  const array = [...token.hourArray]; // Create a copy
-  let last = Number(token.lastHourArchived);
-  let removedCount = 0;
-
-  for (let i = 0; i < array.length; i++) {
-    if (array[i] > end) {
-      break;
-    }
-    
-    const tokenHourID = `${chainId}-${token.id}-${array[i]}`;
-    
-    // Remove the old TokenHourData entity
-    // Note: In Envio, we can't directly remove entities like in TheGraph
-    // We'll mark them for cleanup or handle this differently
-    // For now, we'll just track what should be removed
-    context.log.info(`Marking TokenHourData for cleanup: ${tokenHourID}`);
-    
-    last = array[i];
-    removedCount++;
-    
-    // Limit the number of removals per call to prevent timeouts
-    if (removedCount >= 500) {
-      break;
+  for (let i = 0; i < length; i++) {
+    if (array[i] <= stop) {
+      modArray.splice(i, 1);
     }
   }
 
-  // Update token's hourArray and lastHourArchived
-  if (removedCount > 0) {
-    token.hourArray = array.filter(hour => hour > end);
-    token.lastHourArchived = BigInt(last - 1);
-    
-    // Save the updated token
-    context.Token.set(token);
-  }
+  const updatedToken = {
+    ...token,
+    hourArray: modArray,
+    lastHourArchived: BigInt(stop),
+  };
+  context.Token.set(updatedToken);
 }

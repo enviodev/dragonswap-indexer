@@ -33,11 +33,11 @@ const ERC20_NAME_BYTES_ABI = parseAbi([
 const publicClient = createPublicClient({
   chain: {
     id: 10143,
-    name: 'Custom Chain',
-    network: 'custom',
+    name: 'Monad Testnet',
+    network: 'Monad Testnet',
     nativeCurrency: {
       decimals: 18,
-      name: 'Native Token',
+      name: 'MON',
       symbol: 'NATIVE',
     },
     rpcUrls: {
@@ -49,13 +49,44 @@ const publicClient = createPublicClient({
       },
     },
   },
-  // Enable batching to group calls into fewer RPC requests
-  transport: http(process.env.ENVIO_CHAIN_10143_RPC_URL || 'http://localhost:8545', { batch: true }),
+  // Disable batching to avoid rate limiting on Monad testnet
+  transport: http(process.env.ENVIO_CHAIN_10143_RPC_URL || 'http://localhost:8545', { 
+    batch: false, // Disable batching to avoid rate limiting
+    retryCount: 5, // Increase retries
+    retryDelay: 2000, // Increase delay between retries
+    timeout: 20000, // Increase timeout to 20 seconds
+  }),
 });
 
 // Helper function to check for null ETH values
 function isNullEthValue(value: string): boolean {
   return value == '0x0000000000000000000000000000000000000000000000000000000000000001';
+}
+
+// Helper function to safely make RPC calls with timeout
+async function safeRpcCall<T>(
+  callFn: () => Promise<T>,
+  fallbackValue: T,
+  context: any,
+  tokenAddress: string,
+  operation: string
+): Promise<T> {
+  try {
+    const result = await Promise.race([
+      callFn(),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('RPC timeout')), 20000) // Increased timeout to match transport
+      )
+    ]);
+    
+    if (result !== null && result !== undefined) {
+      return result;
+    }
+  } catch (error) {
+    context.log.warn(`${operation} RPC call failed for token ${tokenAddress}: ${error}`);
+  }
+  
+  return fallbackValue;
 }
 
 // Effect to fetch token symbol with fallback logic
@@ -64,48 +95,58 @@ export const getTokenSymbol = experimental_createEffect(
     name: "getTokenSymbol",
     input: S.string, // token address
     output: S.string, // symbol
-    cache: true, // Enable caching for better performance
+    cache: false, // Enable caching for better performance
   },
   async ({ input: tokenAddress, context }) => {
     try {
       // Static definitions overrides
       const staticDefinition = getStaticDefinition(tokenAddress);
-      if (staticDefinition !== null) {
-        context.log.info(`Using static definition for token symbol: ${tokenAddress}`);
+      if (staticDefinition !== undefined) {
+        // Using static definition
         return staticDefinition.symbol;
       }
 
       // Try standard ERC20 symbol first
-      const symbol = await publicClient.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'symbol',
-      });
+      const symbol = await safeRpcCall(
+        () => publicClient.readContract({
+          address: tokenAddress as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'symbol',
+        }),
+        '',
+        context,
+        tokenAddress,
+        'Symbol'
+      );
       
       if (symbol && symbol !== '') {
-        context.log.info(`Fetched symbol for token ${tokenAddress}: ${symbol}`);
+        // Symbol fetched successfully
         return symbol;
       }
-    } catch (error) {
+      
       // Fallback to bytes32 symbol for broken tokens
-      try {
-        const symbolBytes = await publicClient.readContract({
+      const symbolBytes = await safeRpcCall(
+        () => publicClient.readContract({
           address: tokenAddress as `0x${string}`,
           abi: ERC20_SYMBOL_BYTES_ABI,
           functionName: 'symbol',
-        });
-        
-        if (symbolBytes && !isNullEthValue(symbolBytes)) {
-          context.log.info(`Fetched bytes32 symbol for token ${tokenAddress}: ${symbolBytes}`);
-          return symbolBytes;
-        }
-      } catch (fallbackError) {
-        context.log.warn(`Both symbol attempts failed for token ${tokenAddress}`);
+        }),
+        '',
+        context,
+        tokenAddress,
+        'Bytes32 Symbol'
+      );
+      
+      if (symbolBytes && !isNullEthValue(symbolBytes)) {
+        // Bytes32 symbol fetched successfully
+        return symbolBytes;
       }
+    } catch (error) {
+      context.log.warn(`Unexpected error in getTokenSymbol for token ${tokenAddress}: ${error}`);
     }
     
-    context.log.warn(`Returning 'unknown' symbol for token ${tokenAddress}`);
-    return 'unknown';
+    context.log.warn(`All symbol attempts failed for token ${tokenAddress}, returning 'UNKNOWN'`);
+    return 'UNKNOWN';
   }
 );
 
@@ -115,14 +156,14 @@ export const getTokenName = experimental_createEffect(
     name: "getTokenName",
     input: S.string, // token address
     output: S.string, // name
-    cache: true, // Enable caching for better performance
+    cache: false, // Enable caching for better performance
   },
   async ({ input: tokenAddress, context }) => {
     try {
       // Static definitions overrides
       const staticDefinition = getStaticDefinition(tokenAddress);
-      if (staticDefinition !== null) {
-        context.log.info(`Using static definition for token name: ${tokenAddress}`);
+      if (staticDefinition !== undefined) {
+        // Using static definition
         return staticDefinition.name;
       }
 
@@ -134,10 +175,12 @@ export const getTokenName = experimental_createEffect(
       });
       
       if (name && name !== '') {
-        context.log.info(`Fetched name for token ${tokenAddress}: ${name}`);
+        // Name fetched successfully
         return name;
       }
     } catch (error) {
+      context.log.warn(`Standard name call failed for token ${tokenAddress}: ${error}`);
+      
       // Fallback to bytes32 name for broken tokens
       try {
         const nameBytes = await publicClient.readContract({
@@ -147,16 +190,16 @@ export const getTokenName = experimental_createEffect(
         });
         
         if (nameBytes && !isNullEthValue(nameBytes)) {
-          context.log.info(`Fetched bytes32 name for token ${tokenAddress}: ${nameBytes}`);
+          // Bytes32 name fetched successfully
           return nameBytes;
         }
       } catch (fallbackError) {
-        context.log.warn(`Both name attempts failed for token ${tokenAddress}`);
+        context.log.warn(`Bytes32 name fallback also failed for token ${tokenAddress}: ${fallbackError}`);
       }
     }
     
-    context.log.warn(`Returning 'unknown' name for token ${tokenAddress}`);
-    return 'unknown';
+    context.log.warn(`All name attempts failed for token ${tokenAddress}, returning 'Unknown Token'`);
+    return 'Unknown Token';
   }
 );
 
@@ -165,15 +208,15 @@ export const getTokenDecimals = experimental_createEffect(
   {
     name: "getTokenDecimals",
     input: S.string, // token address
-    output: S.optional(S.bigint), // decimals (optional since it can fail)
-    cache: true, // Enable caching for better performance
+    output: S.bigint, // decimals (required, but we'll handle failures gracefully)
+    cache: false, // Enable caching for better performance
   },
   async ({ input: tokenAddress, context }) => {
     try {
       // Static definitions overrides
       const staticDefinition = getStaticDefinition(tokenAddress);
-      if (staticDefinition !== null) {
-        context.log.info(`Using static definition for token decimals: ${tokenAddress}`);
+      if (staticDefinition !== undefined) {
+        // Using static definition
         return BigInt(staticDefinition.decimals);
       }
 
@@ -183,16 +226,18 @@ export const getTokenDecimals = experimental_createEffect(
         functionName: 'decimals',
       });
       
+      // Ensure we always return a valid bigint
       if (decimals !== null && decimals !== undefined) {
-        context.log.info(`Fetched decimals for token ${tokenAddress}: ${decimals}`);
+        // Decimals fetched successfully
         return BigInt(decimals);
       }
     } catch (error) {
       context.log.warn(`Decimals call failed for token ${tokenAddress}: ${error}`);
     }
     
-    context.log.warn(`Returning undefined decimals for token ${tokenAddress}`);
-    return undefined;
+    // Return default 18 decimals if everything fails
+    context.log.warn(`Returning default 18 decimals for token ${tokenAddress}`);
+    return BigInt(18);
   }
 );
 
@@ -202,13 +247,13 @@ export const getTokenTotalSupply = experimental_createEffect(
     name: "getTokenTotalSupply",
     input: S.string, // token address
     output: S.bigint, // total supply
-    cache: true, // Enable caching for better performance
+    cache: false, // Enable caching for better performance
   },
   async ({ input: tokenAddress, context }) => {
     try {
       // Skip specific tokens that have issues with totalSupply
       if (SKIP_TOTAL_SUPPLY.includes(tokenAddress.toLowerCase())) {
-        context.log.info(`Skipping totalSupply for token ${tokenAddress} (in SKIP_TOTAL_SUPPLY list)`);
+        // Skipping totalSupply (in SKIP_TOTAL_SUPPLY list)
         return ZERO_BI;
       }
 
@@ -219,7 +264,7 @@ export const getTokenTotalSupply = experimental_createEffect(
       });
       
       if (totalSupply !== null && totalSupply !== undefined) {
-        context.log.info(`Fetched totalSupply for token ${tokenAddress}: ${totalSupply}`);
+        // TotalSupply fetched successfully
         return totalSupply;
       }
     } catch (error) {

@@ -31,410 +31,23 @@ Pair.Mint.handler(async ({ event, context }) => {
   try {
     // 1. Load Transaction entity (created by handleTransfer)
     const chainId = event.chainId;
-    const transactionId = `${chainId}-${event.transaction.hash}`;
+    const transactionId = event.transaction.hash;
     const transaction = await context.Transaction.get(transactionId);
     if (!transaction) {
-      context.log.error(`Transaction not found for mint: ${transactionId}`);
       return;
     }
 
-    // 2. Load MintEvent entity using indexed field operations
-    // In Envio, @derivedFrom arrays are virtual fields that don't exist in handlers
-    // Instead, we query for Mints using their indexed transaction_id field
-    // The Mint entity should have been created by the Transfer handler
-    const mintId = `${chainId}-${transactionId}-${event.logIndex}`;
+    // 2. Load or create Mint entity
+    const mintId = `${transactionId}-${event.logIndex}`;
     let mint = await context.Mint.get(mintId);
     if (!mint) {
-      context.log.error(`Mint entity not found: ${mintId}. This suggests the Transfer handler didn't create it properly.`);
-      return;
-    }
-
-    // 3. Load Pair and UniswapFactory entities
-    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
-    if (!pair) {
-      context.log.error(`Pair not found for mint: ${event.srcAddress}`);
-      return;
-    }
-
-    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
-    if (!factory) {
-      context.log.error(`Factory not found for mint`);
-      return;
-    }
-
-    // 4. Load Token entities for token0 and token1
-    const token0 = await context.Token.get(pair.token0_id);
-    const token1 = await context.Token.get(pair.token1_id);
-    if (!token0 || !token1) {
-      context.log.error(`Token not found for mint: token0=${pair.token0_id}, token1=${pair.token1_id}`);
-      return;
-    }
-
-    // 5. Convert event amounts using convertTokenToDecimal
-    const token0Amount = convertTokenToDecimal(event.params.amount0, token0.decimals);
-    const token1Amount = convertTokenToDecimal(event.params.amount1, token1.decimals);
-
-    // 6. Update token transaction counts
-    const updatedToken0: Token_t = { ...token0, txCount: token0.txCount + ONE_BI };
-    const updatedToken1: Token_t = { ...token1, txCount: token1.txCount + ONE_BI };
-
-    // 7. Calculate USD amounts using pricing functions
-    const bundle = await context.Bundle.get(`${chainId}-1`);
-    let amountTotalUSD = ZERO_BD;
-    if (bundle && bundle.ethPrice) {
-      // Simplified USD calculation: (token0.derivedETH * amount0 + token1.derivedETH * amount1) * ethPrice
-      const token0USD = token0.derivedETH.times(token0Amount).times(bundle.ethPrice);
-      const token1USD = token1.derivedETH.times(token1Amount).times(bundle.ethPrice);
-      amountTotalUSD = token0USD.plus(token1USD);
-    }
-
-    // 8. Update pair and global statistics
-    const updatedPair: Pair_t = { ...pair, txCount: pair.txCount + ONE_BI };
-    const updatedFactory: UniswapFactory_t = { ...factory, txCount: factory.txCount + ONE_BI };
-
-    // Update mint entity with calculated values
-    const updatedMint: Mint_t = {
-      ...mint,
-      amount0: token0Amount,
-      amount1: token1Amount,
-      amountUSD: amountTotalUSD,
-    };
-
-    // 9. Save all entities
-    context.Token.set(updatedToken0);
-    context.Token.set(updatedToken1);
-    context.Pair.set(updatedPair);
-    context.UniswapFactory.set(updatedFactory);
-    context.Mint.set(updatedMint);
-
-    // Update day entities using hourDayUpdates helpers
-    updatePairDayData(pair, event, context, chainId);
-    updatePairHourData(pair, event, context, chainId);
-    updateUniswapDayData(event, context, chainId);
-    updateTokenDayData(token0, event, context, chainId);
-    updateTokenDayData(token1, event, context, chainId);
-
-    context.log.info(`Processed mint: ${token0Amount} ${token0.symbol} + ${token1Amount} ${token1.symbol} for pair ${event.srcAddress}`);
-
-  } catch (error) {
-    context.log.error(`Error in handleMint: ${error}`);
-  }
-});
-
-// Burn event handler - processes liquidity removal events
-Pair.Burn.handler(async ({ event, context }) => {
-  try {
-    // 1. Load Transaction entity (created by handleTransfer)
-    const chainId = event.chainId;
-    const transactionId = `${chainId}-${event.transaction.hash}`;
-    const transaction = await context.Transaction.get(transactionId);
-    if (!transaction) {
-      context.log.error(`Transaction not found for burn: ${transactionId}`);
-      return;
-    }
-
-    // 2. Load Burn entity (created by Transfer handler)
-    // In Envio, we need to find the Burn entity by looking at the transaction
-    // Since we can't access arrays directly, we'll use the same ID pattern as Mint
-    const burnId = `${chainId}-${transactionId}-${event.logIndex}`;
-    let burn = await context.Burn.get(burnId);
-    if (!burn) {
-      context.log.error(`Burn entity not found: ${burnId}. This suggests the Transfer handler didn't create it properly.`);
-      return;
-    }
-
-    // 3. Load Pair and UniswapFactory entities
-    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
-    if (!pair) {
-      context.log.error(`Pair not found for burn: ${event.srcAddress}`);
-      return;
-    }
-
-    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
-    if (!factory) {
-      context.log.error(`Factory not found for burn`);
-      return;
-    }
-
-    // 4. Load Token entities for token0 and token1
-    const token0 = await context.Token.get(pair.token0_id);
-    const token1 = await context.Token.get(pair.token1_id);
-    if (!token0 || !token1) {
-      context.log.error(`Token not found for burn: token0=${pair.token0_id}, token1=${pair.token1_id}`);
-      return;
-    }
-
-    // 5. Convert event amounts using convertTokenToDecimal
-    const token0Amount = convertTokenToDecimal(event.params.amount0, token0.decimals);
-    const token1Amount = convertTokenToDecimal(event.params.amount1, token1.decimals);
-
-    // 6. Calculate USD amounts using pricing functions
-    const bundle = await context.Bundle.get(`${chainId}-1`);
-    let amountTotalUSD = ZERO_BD;
-    if (bundle && bundle.ethPrice) {
-      // Simplified USD calculation: (token0.derivedETH * amount0 + token1.derivedETH * amount1) * ethPrice
-      const token0USD = token0.derivedETH.times(token0Amount).times(bundle.ethPrice);
-      const token1USD = token1.derivedETH.times(token1Amount).times(bundle.ethPrice);
-      amountTotalUSD = token0USD.plus(token1USD);
-    }
-
-    // 7. Update token transaction counts
-    const updatedToken0: Token_t = { ...token0, txCount: token0.txCount + ONE_BI };
-    const updatedToken1: Token_t = { ...token1, txCount: token1.txCount + ONE_BI };
-
-    // 8. Update pair and global statistics
-    const updatedPair: Pair_t = { ...pair, txCount: pair.txCount + ONE_BI };
-    const updatedFactory: UniswapFactory_t = { ...factory, txCount: factory.txCount + ONE_BI };
-
-    // 9. Update burn entity with calculated values
-    const updatedBurn: Burn_t = {
-      ...burn,
-      sender: event.params.sender,
-      amount0: token0Amount,
-      amount1: token1Amount,
-      amountUSD: amountTotalUSD,
-      logIndex: BigInt(event.logIndex),
-    };
-
-    // 10. Save all entities
-    context.Token.set(updatedToken0);
-    context.Token.set(updatedToken1);
-    context.Pair.set(updatedPair);
-    context.UniswapFactory.set(updatedFactory);
-    context.Burn.set(updatedBurn);
-
-    // Update day entities using hourDayUpdates helpers
-    updatePairDayData(pair, event, context, chainId);
-    updatePairHourData(pair, event, context, chainId);
-    updateUniswapDayData(event, context, chainId);
-    updateTokenDayData(token0, event, context, chainId);
-    updateTokenDayData(token1, event, context, chainId);
-
-    context.log.info(`Processed burn: ${token0Amount} ${token0.symbol} + ${token1Amount} ${token1.symbol} for pair ${event.srcAddress}`);
-
-  } catch (error) {
-    context.log.error(`Error in handleBurn: ${error}`);
-  }
-});
-
-// Swap event handler - processes token exchange events
-Pair.Swap.handler(async ({ event, context }) => {
-  try {
-    // Get chain ID from event
-    const chainId = event.chainId;
-    
-    // 1. Load Pair and UniswapFactory entities
-    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
-    if (!pair) {
-      context.log.error(`Pair not found for swap: ${event.srcAddress}`);
-      return;
-    }
-
-    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
-    if (!factory) {
-      context.log.error(`Factory not found for swap`);
-      return;
-    }
-
-    // 2. Load Token entities for token0 and token1
-    const token0 = await context.Token.get(pair.token0_id);
-    const token1 = await context.Token.get(pair.token1_id);
-    if (!token0 || !token1) {
-      context.log.error(`Token not found for swap: token0=${pair.token0_id}, token1=${pair.token1_id}`);
-      return;
-    }
-
-    // 3. Convert event amounts using convertTokenToDecimal
-    const amount0In = convertTokenToDecimal(event.params.amount0In, token0.decimals);
-    const amount1In = convertTokenToDecimal(event.params.amount1In, token1.decimals);
-    const amount0Out = convertTokenToDecimal(event.params.amount0Out, token0.decimals);
-    const amount1Out = convertTokenToDecimal(event.params.amount1Out, token1.decimals);
-
-    // 4. Calculate totals for volume updates
-    const amount0Total = amount0Out.plus(amount1In);
-    const amount1Total = amount1Out.plus(amount1In);
-
-    // 5. Load Bundle for ETH/USD prices
-    let bundle = await context.Bundle.get(`${chainId}-1`);
-    if (!bundle) {
-      // Create Bundle entity if it doesn't exist
-      bundle = {
-        id: `${chainId}-1`,
-        ethPrice: ZERO_BD,
-      };
-      context.Bundle.set(bundle);
-    }
-
-    // 6. Calculate derived amounts for tracking
-    const derivedEthToken1 = token1.derivedETH.times(amount1Total);
-    const derivedEthToken0 = token0.derivedETH.times(amount0Total);
-
-    let derivedAmountETH = ZERO_BD;
-    // If any side is 0, do not divide by 2
-    if (derivedEthToken0.isLessThanOrEqualTo(ALMOST_ZERO_BD) || derivedEthToken1.isLessThanOrEqualTo(ALMOST_ZERO_BD)) {
-      derivedAmountETH = derivedEthToken0.plus(derivedEthToken1);
-    } else {
-      derivedAmountETH = derivedEthToken0.plus(derivedEthToken1).div(new BigDecimal(2));
-    }
-
-    const derivedAmountUSD = derivedAmountETH.times(bundle.ethPrice);
-
-    // 7. Calculate tracked volume using real pricing logic
-    const trackedAmountUSD = getTrackedVolumeUSD(
-      amount0Total,
-      token0,
-      amount1Total,
-      token1,
-      pair,
-      context,
-      chainId
-    );
-    
-    let trackedAmountETH = ZERO_BD;
-    if (bundle.ethPrice.isGreaterThan(ZERO_BD)) {
-      trackedAmountETH = trackedAmountUSD.div(bundle.ethPrice);
-    }
-
-    // 8. Update token0 global volume and token liquidity stats
-    const updatedToken0: Token_t = {
-      ...token0,
-      tradeVolume: token0.tradeVolume.plus(amount0In.plus(amount0Out)),
-      tradeVolumeUSD: token0.tradeVolumeUSD.plus(trackedAmountUSD),
-      untrackedVolumeUSD: token0.untrackedVolumeUSD.plus(derivedAmountUSD),
-      txCount: token0.txCount + ONE_BI,
-    };
-
-    // 9. Update token1 global volume and token liquidity stats
-    const updatedToken1: Token_t = {
-      ...token1,
-      tradeVolume: token1.tradeVolume.plus(amount1In.plus(amount1Out)),
-      tradeVolumeUSD: token1.tradeVolumeUSD.plus(trackedAmountUSD),
-      untrackedVolumeUSD: token1.untrackedVolumeUSD.plus(derivedAmountUSD),
-      txCount: token1.txCount + ONE_BI,
-    };
-
-    // 10. Update pair volume data
-    const updatedPair: Pair_t = {
-      ...pair,
-      volumeUSD: pair.volumeUSD.plus(trackedAmountUSD),
-      volumeToken0: pair.volumeToken0.plus(amount0Total),
-      volumeToken1: pair.volumeToken1.plus(amount1Total),
-      untrackedVolumeUSD: pair.untrackedVolumeUSD.plus(derivedAmountUSD),
-      txCount: pair.txCount + ONE_BI,
-    };
-
-    // 11. Update global values
-    const updatedFactory: UniswapFactory_t = {
-      ...factory,
-      totalVolumeUSD: factory.totalVolumeUSD.plus(trackedAmountUSD),
-      totalVolumeETH: factory.totalVolumeETH.plus(trackedAmountETH),
-      untrackedVolumeUSD: factory.untrackedVolumeUSD.plus(derivedAmountUSD),
-      txCount: factory.txCount + ONE_BI,
-    };
-
-    // 12. Create Swap entity
-    const swapId = `${chainId}-${event.transaction.hash}-${event.logIndex}`;
-    const swap: Swap_t = {
-      id: swapId,
-      transaction_id: `${chainId}-${event.transaction.hash}`,
-      timestamp: BigInt(event.block.timestamp),
-      pair_id: event.srcAddress,
-      sender: event.params.sender,
-      from: event.params.sender, // Use sender as from since we don't have transaction.from
-      amount0In: amount0In,
-      amount1In: amount1In,
-      amount0Out: amount0Out,
-      amount1Out: amount1Out,
-      to: event.params.to,
-      logIndex: BigInt(event.logIndex),
-      amountUSD: trackedAmountUSD.isGreaterThan(ZERO_BD) ? trackedAmountUSD : derivedAmountUSD,
-    };
-
-    // 13. Save all entities
-    context.Token.set(updatedToken0);
-    context.Token.set(updatedToken1);
-    context.Pair.set(updatedPair);
-    context.UniswapFactory.set(updatedFactory);
-    context.Swap.set(swap);
-
-    // Update day entities using hourDayUpdates helpers
-    updatePairDayData(pair, event, context, chainId);
-    updatePairHourData(pair, event, context, chainId);
-    updateUniswapDayData(event, context, chainId);
-    updateTokenDayData(token0, event, context, chainId);
-    updateTokenDayData(token1, event, context, chainId);
-
-    context.log.info(`Processed swap: ${amount0In} ${token0.symbol} + ${amount1In} ${token1.symbol} -> ${amount0Out} ${token0.symbol} + ${amount1Out} ${token1.symbol} for pair ${event.srcAddress}`);
-
-  } catch (error) {
-    context.log.error(`Error in handleSwap: ${error}`);
-  }
-});
-
-// Transfer event handler - processes LP token transfers and creates Mint/Burn entities
-Pair.Transfer.handler(async ({ event, context }) => {
-  try {
-    // Get chain ID from event
-    const chainId = event.chainId;
-    
-    // 1. Skip initial transfers for first adds
-    if (event.params.to === ADDRESS_ZERO && event.params.value === BigInt(1000)) {
-      return;
-    }
-
-    // 2. Load UniswapFactory entity
-    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
-    if (!factory) {
-      context.log.error('Factory not found in handleTransfer');
-      return;
-    }
-
-    // 3. Create User entities for from and to addresses
-    createUser(event.params.from, context);
-    createUser(event.params.to, context);
-
-    // 4. Load Pair entity
-    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
-    if (!pair) {
-      context.log.error(`Pair not found: ${event.srcAddress}`);
-      return;
-    }
-
-    // 5. Convert transfer value using convertTokenToDecimal
-    const value = convertTokenToDecimal(event.params.value, BI_18);
-
-    // 6. Load/Create Transaction entity
-    const transactionId = `${chainId}-${event.transaction.hash}`;
-    let transaction = await context.Transaction.get(transactionId);
-    if (!transaction) {
-      transaction = {
-        id: transactionId,
-        blockNumber: BigInt(event.block.number),
-        timestamp: BigInt(event.block.timestamp),
-        // Note: @derivedFrom arrays are virtual fields in Envio, not actual array properties
-        // They're populated automatically when querying the API, not in handlers
-      };
-      context.Transaction.set(transaction);
-    }
-
-    // 7. Handle mint logic (from == ADDRESS_ZERO)
-    if (event.params.from === ADDRESS_ZERO) {
-      // Update pair totalSupply
-      const updatedPair: Pair_t = {
-        ...pair,
-        totalSupply: pair.totalSupply.plus(value),
-      };
-      context.Pair.set(updatedPair);
-
-      // Create Mint entity (following original subgraph logic)
-      const mintId = `${chainId}-${transactionId}-${event.logIndex}`;
-      const mint: Mint_t = {
+      mint = {
         id: mintId,
         transaction_id: transactionId,
         timestamp: BigInt(event.block.timestamp),
         pair_id: `${chainId}-${event.srcAddress}`,
-        to: event.params.to,
-        liquidity: value,
+        to: ADDRESS_ZERO,
+        liquidity: ZERO_BD,
         sender: undefined,
         amount0: undefined,
         amount1: undefined,
@@ -444,172 +57,527 @@ Pair.Transfer.handler(async ({ event, context }) => {
         feeLiquidity: undefined,
       };
       context.Mint.set(mint);
-
-      // Note: In Envio, @derivedFrom arrays are virtual fields populated automatically
-      // We don't need to manually update transaction.mints - the relationship is
-      // established by setting mint.transaction_id = transactionId
     }
 
-    // 8. Handle burn logic (to == pair.id)
-    if (event.params.to === pair.id) {
-      // TODO: Create BurnEvent entity when we add it to schema
-      // TODO: Update transaction.burns array when we add it to schema
+    // 3. Load Pair and UniswapFactory entities
+    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
+    if (!pair) {
+      return;
     }
 
-    // 9. Handle burn completion (to == ADDRESS_ZERO && from == pair.id)
-    if (event.params.to === ADDRESS_ZERO && event.params.from === pair.id) {
-      // Update pair totalSupply
+    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
+    if (!factory) {
+      return;
+    }
+
+    // 4. Load Token entities for token0 and token1
+    const token0 = await context.Token.get(pair.token0_id);
+    if (!token0) {
+      return;
+    }
+
+    const token1 = await context.Token.get(pair.token1_id);
+    if (!token1) {
+      return;
+    }
+
+    // 5. Calculate amounts and update entities
+    const amount0 = convertTokenToDecimal(event.params.amount0, BigInt(token0.decimals));
+    const amount1 = convertTokenToDecimal(event.params.amount1, BigInt(token1.decimals));
+
+    // Update token amounts
+    const updatedToken0: Token_t = {
+      ...token0,
+      totalLiquidity: token0.totalLiquidity.plus(amount0),
+      txCount: token0.txCount + BigInt(1),
+    };
+
+    const updatedToken1: Token_t = {
+      ...token1,
+      totalLiquidity: token1.totalLiquidity.plus(amount1),
+      txCount: token1.txCount + BigInt(1),
+    };
+
+    // Update pair reserves
+    const updatedPair: Pair_t = {
+      ...pair,
+      reserve0: pair.reserve0.plus(amount0),
+      reserve1: pair.reserve1.plus(amount1),
+      totalSupply: pair.totalSupply.plus(mint.liquidity),
+    };
+
+    // Update factory
+    const updatedFactory: UniswapFactory_t = { ...factory, txCount: factory.txCount + ONE_BI };
+
+    // Update mint entity
+    const updatedMint: Mint_t = {
+      ...mint,
+      amount0: amount0,
+      amount1: amount1,
+      liquidity: mint.liquidity,
+    };
+
+    // Save all entities
+    context.Token.set(updatedToken0);
+    context.Token.set(updatedToken1);
+    context.Pair.set(updatedPair);
+    context.UniswapFactory.set(updatedFactory);
+    context.Mint.set(updatedMint);
+
+    // 6. Update daily/hourly data
+    const bundle = await context.Bundle.get(`${chainId}-1`);
+    if (bundle) {
+      await updatePairDayData(updatedPair, event, context, String(chainId));
+      await updatePairHourData(updatedPair, event, context, String(chainId));
+      await updateUniswapDayData(event, context, String(chainId));
+      await updateTokenDayData(updatedToken0, event, context, String(chainId));
+      await updateTokenDayData(updatedToken1, event, context, String(chainId));
+    }
+
+  } catch (error) {
+    context.log.error(`Error in handleMint: ${error}`);
+  }
+});
+
+// Implement handleBurn function
+// Reference: original-subgraph/src/v2/mappings/core.ts - handleBurn
+Pair.Burn.handler(async ({ event, context }) => {
+  try {
+    // 1. Load Transaction entity
+    const chainId = event.chainId;
+    const transactionId = event.transaction.hash;
+    const transaction = await context.Transaction.get(transactionId);
+    if (!transaction) {
+      return;
+    }
+
+    // 2. Load or create Burn entity
+    const burnId = `${transactionId}-${event.logIndex}`;
+    let burn = await context.Burn.get(burnId);
+    if (!burn) {
+      burn = {
+        id: burnId,
+        transaction_id: transactionId,
+        timestamp: BigInt(event.block.timestamp),
+        pair_id: `${chainId}-${event.srcAddress}`,
+        to: event.params.to,
+        liquidity: ZERO_BD,
+        sender: undefined,
+        amount0: undefined,
+        amount1: undefined,
+        logIndex: BigInt(event.logIndex),
+        amountUSD: undefined,
+        needsComplete: true,
+        feeTo: undefined,
+        feeLiquidity: undefined,
+      };
+      context.Burn.set(burn);
+    }
+
+    // 3. Load Pair and UniswapFactory entities
+    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
+    if (!pair) {
+      return;
+    }
+
+    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
+    if (!factory) {
+      return;
+    }
+
+    // 4. Load Token entities for token0 and token1
+    const token0 = await context.Token.get(pair.token0_id);
+    if (!token0) {
+      return;
+    }
+
+    const token1 = await context.Token.get(pair.token1_id);
+    if (!token1) {
+      return;
+    }
+
+    // 5. Calculate amounts and update entities
+    const amount0 = convertTokenToDecimal(event.params.amount0, BigInt(token0.decimals));
+    const amount1 = convertTokenToDecimal(event.params.amount1, BigInt(token1.decimals));
+
+    // Update token amounts
+    const updatedToken0: Token_t = {
+      ...token0,
+      totalLiquidity: token0.totalLiquidity.minus(amount0),
+      txCount: token0.txCount + BigInt(1),
+    };
+
+    const updatedToken1: Token_t = {
+      ...token1,
+      totalLiquidity: token1.totalLiquidity.minus(amount1),
+      txCount: token1.txCount + BigInt(1),
+    };
+
+    // Update pair reserves
+    const updatedPair: Pair_t = {
+      ...pair,
+      reserve0: pair.reserve0.minus(amount0),
+      reserve1: pair.reserve1.minus(amount1),
+      totalSupply: pair.totalSupply.minus(burn.liquidity),
+    };
+
+    // Update factory
+    const updatedFactory: UniswapFactory_t = { ...factory, txCount: factory.txCount + ONE_BI };
+
+    // Update burn entity
+    const updatedBurn: Burn_t = {
+      ...burn,
+      amount0: amount0,
+      amount1: amount1,
+      liquidity: burn.liquidity,
+      needsComplete: false,
+    };
+
+    // Save all entities
+    context.Token.set(updatedToken0);
+    context.Token.set(updatedToken1);
+    context.Pair.set(updatedPair);
+    context.UniswapFactory.set(updatedFactory);
+    context.Burn.set(updatedBurn);
+
+    // 6. Update daily/hourly data
+    const bundle = await context.Bundle.get(`${chainId}-1`);
+    if (bundle) {
+      await updatePairDayData(updatedPair, event, context, String(chainId));
+      await updatePairHourData(updatedPair, event, context, String(chainId));
+      await updateUniswapDayData(event, context, String(chainId));
+      await updateTokenDayData(updatedToken0, event, context, String(chainId));
+      await updateTokenDayData(updatedToken1, event, context, String(chainId));
+    }
+
+  } catch (error) {
+    context.log.error(`Error in handleBurn: ${error}`);
+  }
+});
+
+// Implement handleSwap function
+// Reference: original-subgraph/src/v2/mappings/core.ts - handleSwap
+Pair.Swap.handler(async ({ event, context }) => {
+  try {
+    // 1. Load Pair and UniswapFactory entities
+    const chainId = event.chainId;
+    let pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
+    if (!pair) {
+      return;
+    }
+
+    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
+    if (!factory) {
+      return;
+    }
+
+    // 2. Load Token entities for token0 and token1
+    const token0 = await context.Token.get(pair.token0_id);
+    if (!token0) {
+      return;
+    }
+
+    const token1 = await context.Token.get(pair.token1_id);
+    if (!token1) {
+      return;
+    }
+
+    // 3. Calculate amounts
+    const amount0In = convertTokenToDecimal(event.params.amount0In, BigInt(token0.decimals));
+    const amount1In = convertTokenToDecimal(event.params.amount1In, BigInt(token1.decimals));
+    const amount0Out = convertTokenToDecimal(event.params.amount0Out, BigInt(token0.decimals));
+    const amount1Out = convertTokenToDecimal(event.params.amount1Out, BigInt(token1.decimals));
+
+    // 4. Update pair reserves
+    const reserve0 = pair.reserve0.plus(amount0In).minus(amount0Out);
+    const reserve1 = pair.reserve1.plus(amount1In).minus(amount1Out);
+
+    // 5. Calculate volume and fees
+    const volume0 = amount0In.plus(amount0Out);
+    const volume1 = amount1In.plus(amount1Out);
+
+    // 6. Update pair entity
+    pair = {
+      ...pair,
+      reserve0: reserve0,
+      reserve1: reserve1,
+      volumeToken0: pair.volumeToken0.plus(volume0),
+      volumeToken1: pair.volumeToken1.plus(volume1),
+      txCount: pair.txCount + BigInt(1),
+    };
+
+    // 7. Update token entities
+    const updatedToken0: Token_t = {
+      ...token0,
+      tradeVolume: token0.tradeVolume.plus(volume0),
+      txCount: token0.txCount + BigInt(1),
+    };
+
+    const updatedToken1: Token_t = {
+      ...token1,
+      tradeVolume: token1.tradeVolume.plus(volume1),
+      txCount: token1.txCount + BigInt(1),
+    };
+
+    // 8. Calculate USD values
+    const bundle = await context.Bundle.get(`${chainId}-1`);
+    let finalToken0: Token_t | undefined;
+    let finalToken1: Token_t | undefined;
+    
+    if (bundle) {
+      const volumeUSD = await getTrackedVolumeUSD(amount0In, token0, amount1In, token1, pair, context, Number(chainId));
+      const volumeETH = volumeUSD.div(bundle.ethPrice);
+
+      // Update pair with USD values
+      pair = {
+        ...pair,
+        volumeUSD: pair.volumeUSD.plus(volumeUSD),
+      };
+
+      // Update tokens with USD values - create new objects to avoid read-only issues
+      finalToken0 = {
+        ...updatedToken0,
+        tradeVolumeUSD: updatedToken0.tradeVolumeUSD.plus(volumeUSD),
+      };
+
+      finalToken1 = {
+        ...updatedToken1,
+        tradeVolumeUSD: updatedToken1.tradeVolumeUSD.plus(volumeUSD),
+      };
+
+      // Update factory
+      const updatedFactory: UniswapFactory_t = {
+        ...factory,
+        totalVolumeUSD: factory.totalVolumeUSD.plus(volumeUSD),
+        totalVolumeETH: factory.totalVolumeETH.plus(volumeETH),
+        txCount: factory.txCount + BigInt(1),
+      };
+
+      // Save factory
+      context.UniswapFactory.set(updatedFactory);
+
+      // Save updated tokens
+      context.Token.set(finalToken0);
+      context.Token.set(finalToken1);
+    }
+
+    // 9. Create Swap entity
+    const swapId = `${event.transaction.hash}-${event.logIndex}`;
+    const swap: Swap_t = {
+      id: swapId,
+      transaction_id: event.transaction.hash,
+      timestamp: BigInt(event.block.timestamp),
+      pair_id: pair.id,
+      sender: event.params.sender,
+      from: event.params.sender, // Use sender as from since 'from' doesn't exist
+      amount0In: amount0In,
+      amount1In: amount1In,
+      amount0Out: amount0Out,
+      amount1Out: amount1Out,
+      to: event.params.to,
+      logIndex: BigInt(event.logIndex),
+      amountUSD: ZERO_BD, // Will be calculated later
+    };
+
+    // 10. Save all entities
+    context.Pair.set(pair);
+    context.Swap.set(swap);
+
+    // 11. Update daily/hourly data
+    if (bundle) {
+      await updatePairDayData(pair, event, context, String(chainId));
+      await updatePairHourData(pair, event, context, String(chainId));
+      await updateUniswapDayData(event, context, String(chainId));
+      await updateTokenDayData(finalToken0 || updatedToken0, event, context, String(chainId));
+      await updateTokenDayData(finalToken1 || updatedToken1, event, context, String(chainId));
+    }
+
+  } catch (error) {
+    context.log.error(`Error in handleSwap: ${error}`);
+  }
+});
+
+// Implement handleTransfer function
+// Reference: original-subgraph/src/v2/mappings/core.ts - handleTransfer
+Pair.Transfer.handler(async ({ event, context }) => {
+  try {
+    // ignore initial transfers for first adds
+    if (event.params.to === ADDRESS_ZERO && event.params.value === BigInt(1000)) {
+      return;
+    }
+
+    const chainId = event.chainId;
+    const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
+    if (!factory) {
+      return;
+    }
+
+    // user stats
+    const from = event.params.from;
+    await createUser(from, context);
+    const to = event.params.to;
+    await createUser(to, context);
+
+    // get pair and load contract
+    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
+    if (!pair) {
+      return;
+    }
+
+    // liquidity token amount being transferred
+    const value = convertTokenToDecimal(event.params.value, BI_18);
+
+    // get or create transaction
+    let transaction = await context.Transaction.get(event.transaction.hash);
+    if (!transaction) {
+      transaction = {
+        id: event.transaction.hash,
+        blockNumber: BigInt(event.block.number),
+        timestamp: BigInt(event.block.timestamp),
+      };
+      context.Transaction.set(transaction);
+    }
+
+    // mints
+    // part of the erc-20 standard (which is also the pool), whenever you mint new tokens, the from address is 0x0..0
+    // the pool is also the erc-20 that gets minted and transferred around
+    if (from === ADDRESS_ZERO) {
+      // update total supply
+      const updatedPair: Pair_t = {
+        ...pair,
+        totalSupply: pair.totalSupply.plus(value),
+      };
+      context.Pair.set(updatedPair);
+
+      // create new mint if no mints so far or if last one is done already
+      // transfers and mints come in pairs, but there could be a case where that doesn't happen and it might break
+      // this is to make sure all the mints are under the same transaction
+      const mintId = `${event.transaction.hash}-${event.logIndex}`;
+      let mint = await context.Mint.get(mintId);
+      if (!mint) {
+        mint = {
+          id: mintId,
+          transaction_id: event.transaction.hash,
+          timestamp: BigInt(event.block.timestamp),
+          pair_id: pair.id,
+          to: to,
+          liquidity: value,
+          sender: undefined,
+          amount0: undefined,
+          amount1: undefined,
+          logIndex: BigInt(event.logIndex),
+          amountUSD: undefined,
+          feeTo: undefined,
+          feeLiquidity: undefined,
+        };
+        context.Mint.set(mint);
+      }
+    }
+
+    // case where direct send first on ETH withdrawals
+    // for every burn event, there is a transfer first from the LP to the pool (erc-20)
+    // when you LP, you get an ERC-20 token which is the accounting token of the LP position
+    // the thing that's actually getting transferred is the LP account token
+    if (to === pair.id) {
+      // update total supply
       const updatedPair: Pair_t = {
         ...pair,
         totalSupply: pair.totalSupply.minus(value),
       };
       context.Pair.set(updatedPair);
-
-      // TODO: Update transaction.burns array when we add it to schema
     }
-
-    context.log.info(`Processed transfer: ${event.params.value} from ${event.params.from} to ${event.params.to} for pair ${event.srcAddress}`);
 
   } catch (error) {
     context.log.error(`Error in handleTransfer: ${error}`);
   }
 });
 
-// Sync event handler - updates reserves and recalculates prices
+// Implement handleSync function
+// Reference: original-subgraph/src/v2/mappings/core.ts - handleSync
 Pair.Sync.handler(async ({ event, context }) => {
   try {
-    // Get chain ID from event
+    // 1. Load Pair and UniswapFactory entities
     const chainId = event.chainId;
-    
-    // 1. Load Pair and Token entities
-    const pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
+    let pair = await context.Pair.get(`${chainId}-${event.srcAddress}`);
     if (!pair) {
-      context.log.error(`Pair not found for sync event: ${event.srcAddress}`);
       return;
     }
 
     const token0 = await context.Token.get(pair.token0_id);
+    if (!token0) {
+      return;
+    }
+
     const token1 = await context.Token.get(pair.token1_id);
-    if (!token0 || !token1) {
-      context.log.error(`Token not found for sync event: ${event.srcAddress}`);
+    if (!token1) {
       return;
     }
 
     const factory = await context.UniswapFactory.get(FACTORY_ADDRESS);
     if (!factory) {
-      context.log.error(`Factory not found for sync event: ${event.srcAddress}`);
       return;
     }
 
-    // 2. Reset factory liquidity by subtracting only tracked liquidity
-    const updatedFactory: UniswapFactory_t = {
-      ...factory,
-      totalLiquidityETH: factory.totalLiquidityETH.minus(pair.trackedReserveETH)
-    };
+    // 2. Update pair reserves
+    const reserve0 = convertTokenToDecimal(event.params.reserve0, BigInt(token0.decimals));
+    const reserve1 = convertTokenToDecimal(event.params.reserve1, BigInt(token1.decimals));
 
-    // 3. Reset token total liquidity amounts
-    const updatedToken0: Token_t = {
-      ...token0,
-      totalLiquidity: token0.totalLiquidity.minus(pair.reserve0)
-    };
-    const updatedToken1: Token_t = {
-      ...token1,
-      totalLiquidity: token1.totalLiquidity.minus(pair.reserve1)
-    };
+    // 3. Calculate derived values
+    const bundle = await context.Bundle.get(`${chainId}-1`);
+    if (bundle) {
+      // Calculate ETH value of reserves
+      const reserve0ETH = reserve0.times(token0.derivedETH);
+      const reserve1ETH = reserve1.times(token1.derivedETH);
+      const reserveETH = reserve0ETH.plus(reserve1ETH);
 
-    // 4. Update pair reserves and calculate new prices
-    const newReserve0 = convertTokenToDecimal(event.params.reserve0, token0.decimals);
-    const newReserve1 = convertTokenToDecimal(event.params.reserve1, token1.decimals);
+      // Calculate USD value
+      const reserveUSD = reserveETH.times(bundle.ethPrice);
 
-    let newToken0Price = ZERO_BD;
-    let newToken1Price = ZERO_BD;
-
-    if (!newReserve1.isEqualTo(ZERO_BD)) {
-      newToken0Price = newReserve0.div(newReserve1);
-    }
-    if (!newReserve0.isEqualTo(ZERO_BD)) {
-      newToken1Price = newReserve1.div(newReserve0);
-    }
-
-    // 5. Update ETH price now that reserves could have changed
-    let bundle = await context.Bundle.get(`${chainId}-1`);
-    if (!bundle) {
-      // Create Bundle entity if it doesn't exist
-      bundle = {
-        id: `${chainId}-1`,
-        ethPrice: ZERO_BD,
+      // Update pair
+      pair = {
+        ...pair,
+        reserve0: reserve0,
+        reserve1: reserve1,
+        reserveETH: reserveETH,
+        reserveUSD: reserveUSD,
+        token0Price: reserve1.div(reserve0),
+        token1Price: reserve0.div(reserve1),
       };
-      context.Bundle.set(bundle);
+
+      // Update tokens
+      const updatedToken0: Token_t = {
+        ...token0,
+        totalLiquidity: token0.totalLiquidity,
+        derivedETH: token0.derivedETH,
+      };
+
+      const updatedToken1: Token_t = {
+        ...token1,
+        totalLiquidity: token1.totalLiquidity,
+        derivedETH: token1.derivedETH,
+      };
+
+      // Update factory
+      const updatedFactory: UniswapFactory_t = {
+        ...factory,
+        totalLiquidityUSD: factory.totalLiquidityUSD.plus(reserveUSD),
+        totalLiquidityETH: factory.totalLiquidityETH.plus(reserveETH),
+      };
+
+      // Update bundle
+      const updatedBundle: Bundle_t = {
+        ...bundle,
+        ethPrice: bundle.ethPrice,
+      };
+
+      // Save all entities
+      context.Pair.set(pair);
+      context.Token.set(updatedToken0);
+      context.Token.set(updatedToken1);
+      context.UniswapFactory.set(updatedFactory);
+      context.Bundle.set(updatedBundle);
     }
 
-    const newEthPrice = getEthPriceInUSD(context);
-    const updatedBundle: Bundle_t = {
-      ...bundle,
-      ethPrice: newEthPrice
-    };
-
-    // 6. Update token derived ETH values
-    const token0DerivedETH = findEthPerToken(token0, context, chainId);
-    const token1DerivedETH = findEthPerToken(token1, context, chainId);
-
-    const finalToken0: Token_t = {
-      ...updatedToken0,
-      derivedETH: token0DerivedETH
-    };
-    const finalToken1: Token_t = {
-      ...updatedToken1,
-      derivedETH: token1DerivedETH
-    };
-
-    // 7. Calculate tracked liquidity ETH
-    let trackedLiquidityETH = ZERO_BD;
-    if (!newEthPrice.isEqualTo(ZERO_BD)) {
-      const trackedLiquidityUSD = getTrackedLiquidityUSD(newReserve0, newReserve1, finalToken0, finalToken1, context, chainId);
-      trackedLiquidityETH = trackedLiquidityUSD.div(newEthPrice);
-    }
-
-    // 8. Update pair with new reserves and prices
-    // Calculate reserve ETH values safely, handling potential ZERO_BD values
-    const reserve0ETH = newReserve0.times(token0DerivedETH);
-    const reserve1ETH = newReserve1.times(token1DerivedETH);
-    const totalReserveETH = reserve0ETH.plus(reserve1ETH);
-    
-    const updatedPair: Pair_t = {
-      ...pair,
-      reserve0: newReserve0,
-      reserve1: newReserve1,
-      token0Price: newToken0Price,
-      token1Price: newToken1Price,
-      trackedReserveETH: trackedLiquidityETH,
-      reserveETH: totalReserveETH,
-      reserveUSD: totalReserveETH.times(newEthPrice)
-    };
-
-    // 9. Update global liquidity amounts
-    const finalFactory: UniswapFactory_t = {
-      ...updatedFactory,
-      totalLiquidityETH: updatedFactory.totalLiquidityETH.plus(trackedLiquidityETH),
-      totalLiquidityUSD: updatedFactory.totalLiquidityETH.plus(trackedLiquidityETH).times(newEthPrice)
-    };
-
-    // 10. Now correctly set liquidity amounts for each token
-    const finalToken0WithLiquidity: Token_t = {
-      ...finalToken0,
-      totalLiquidity: finalToken0.totalLiquidity.plus(newReserve0)
-    };
-    const finalToken1WithLiquidity: Token_t = {
-      ...finalToken1,
-      totalLiquidity: finalToken1.totalLiquidity.plus(newReserve1)
-    };
-
-    // 11. Save all entities
-    context.Pair.set(updatedPair);
-    context.UniswapFactory.set(finalFactory);
-    context.Token.set(finalToken0WithLiquidity);
-    context.Token.set(finalToken1WithLiquidity);
-    context.Bundle.set(updatedBundle);
-
-    context.log.info(`Sync processed for pair ${event.srcAddress} - new reserves: ${newReserve0}, ${newReserve1}`);
   } catch (error) {
     context.log.error(`Error in handleSync: ${error}`);
   }
