@@ -211,8 +211,8 @@ export async function updateTokenHourData(
   if (!tokenHourData) {
     tokenHourData = {
       id: tokenHourID,
-      periodStartUnix: BigInt(hourStartUnix),
-      token: token.id,
+      periodStartUnix: hourStartUnix,
+      token_id: token.id,
       volume: ZERO_BD,
       volumeUSD: ZERO_BD,
       untrackedVolumeUSD: ZERO_BD,
