@@ -9,7 +9,7 @@ export const REFERENCE_TOKEN = '0xB5a30b0FDc5EA94A52fDc42e3E9760Cb8449Fb37' // W
 // Stable token pairs for USD pricing (USDC/WETH)
 export const STABLE_TOKEN_PAIRS = [
   '0xfe9241e7b94bf0f5f0d8de0851c9421a38b54916', // USDC/WETH pair
-  '0x132Cb626Be0dD6EB3b53FbeB392838c7A7b93621'
+  //'0x132Cb626Be0dD6EB3b53FbeB392838c7A7b93621'
 ]
 
 // token where amounts should contribute to tracked volume and liquidity
