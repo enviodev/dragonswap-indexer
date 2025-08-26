@@ -70,10 +70,10 @@ Factory.PairCreated.handler(async ({ event, context }) => {
       try {
         // Fetch token metadata using Effect API
         const [symbol0, name0, totalSupply0, decimals0] = await Promise.all([
-          context.effect(getTokenSymbol, event.params.token0),
-          context.effect(getTokenName, event.params.token0),
-          context.effect(getTokenTotalSupply, event.params.token0),
-          context.effect(getTokenDecimals, event.params.token0)
+          context.effect(getTokenSymbol, { tokenAddress: event.params.token0, chainId }),
+          context.effect(getTokenName, { tokenAddress: event.params.token0, chainId }),
+          context.effect(getTokenTotalSupply, { tokenAddress: event.params.token0, chainId }),
+          context.effect(getTokenDecimals, { tokenAddress: event.params.token0, chainId })
         ]);
         
         // Bail if we couldn't figure out the decimals
@@ -107,10 +107,10 @@ Factory.PairCreated.handler(async ({ event, context }) => {
       try {
         // Fetch token metadata using Effect API
         const [symbol1, name1, totalSupply1, decimals1] = await Promise.all([
-          context.effect(getTokenSymbol, event.params.token1),
-          context.effect(getTokenName, event.params.token1),
-          context.effect(getTokenTotalSupply, event.params.token1),
-          context.effect(getTokenDecimals, event.params.token1)
+          context.effect(getTokenSymbol, { tokenAddress: event.params.token1, chainId }),
+          context.effect(getTokenName, { tokenAddress: event.params.token1, chainId }),
+          context.effect(getTokenTotalSupply, { tokenAddress: event.params.token1, chainId }),
+          context.effect(getTokenDecimals, { tokenAddress: event.params.token1, chainId })
         ]);
 
         // Bail if we couldn't figure out the decimals

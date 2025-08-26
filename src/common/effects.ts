@@ -6,6 +6,7 @@ import { createPublicClient, http, parseAbi } from 'viem';
 import * as dotenv from 'dotenv';
 import { getStaticDefinition, SKIP_TOTAL_SUPPLY } from './tokenDefinition';
 import { ZERO_BI } from './constants';
+import { getChainConfig } from './chainRpcConfig';
 
 // Load environment variables
 dotenv.config();
@@ -29,34 +30,39 @@ const ERC20_NAME_BYTES_ABI = parseAbi([
   'function name() view returns (bytes32)',
 ]);
 
-// Create a public client with batching enabled for better performance
-const publicClient = createPublicClient({
-  chain: {
-    id: 10143,
-    name: 'Monad Testnet',
-    network: 'Monad Testnet',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'MON',
-      symbol: 'NATIVE',
-    },
-    rpcUrls: {
-      default: {
-        http: [process.env.ENVIO_CHAIN_10143_RPC_URL || 'http://localhost:8545'],
+// Function to create a public client for a specific chain
+function createChainClient(chainId: number) {
+  const chainConfig = getChainConfig(chainId);
+  
+  // The getChainConfig function already validates that rpcUrl exists
+  // but TypeScript doesn't know that, so we add an explicit check
+  if (!chainConfig.rpcUrl) {
+    throw new Error(`RPC URL not configured for chain ${chainId}`);
+  }
+  
+  return createPublicClient({
+    chain: {
+      id: chainConfig.chainId,
+      name: chainConfig.name,
+      network: chainConfig.network,
+      nativeCurrency: chainConfig.nativeCurrency,
+      rpcUrls: {
+        default: {
+          http: [chainConfig.rpcUrl],
+        },
+        public: {
+          http: [chainConfig.rpcUrl],
+        },
       },
-      public: {
-        http: [process.env.ENVIO_CHAIN_10143_RPC_URL || 'http://localhost:8545'],
-      },
     },
-  },
-  // Disable batching to avoid rate limiting on Monad testnet
-  transport: http(process.env.ENVIO_CHAIN_10143_RPC_URL || 'http://localhost:8545', { 
-    batch: false, // Disable batching to avoid rate limiting
-    retryCount: 5, // Increase retries
-    retryDelay: 2000, // Increase delay between retries
-    timeout: 20000, // Increase timeout to 20 seconds
-  }),
-});
+    transport: http(chainConfig.rpcUrl, { 
+      batch: false, // Disable batching to avoid rate limiting
+      retryCount: 5, // Increase retries
+      retryDelay: 2000, // Increase delay between retries
+      timeout: 20000, // Increase timeout to 20 seconds
+    }),
+  });
+}
 
 // Helper function to check for null ETH values
 function isNullEthValue(value: string): boolean {
@@ -93,11 +99,15 @@ async function safeRpcCall<T>(
 export const getTokenSymbol = experimental_createEffect(
   {
     name: "getTokenSymbol",
-    input: S.string, // token address
+    input: {
+      tokenAddress: S.string,
+      chainId: S.number,
+    },
     output: S.string, // symbol
     cache: false, // Enable caching for better performance
   },
-  async ({ input: tokenAddress, context }) => {
+  async ({ input, context }) => {
+    const { tokenAddress, chainId } = input;
     try {
       // Static definitions overrides
       const staticDefinition = getStaticDefinition(tokenAddress);
@@ -105,6 +115,9 @@ export const getTokenSymbol = experimental_createEffect(
         // Using static definition
         return staticDefinition.symbol;
       }
+
+      // Create chain-specific client
+      const publicClient = createChainClient(chainId);
 
       // Try standard ERC20 symbol first
       const symbol = await safeRpcCall(
@@ -154,11 +167,19 @@ export const getTokenSymbol = experimental_createEffect(
 export const getTokenName = experimental_createEffect(
   {
     name: "getTokenName",
-    input: S.string, // token address
+    input: {
+      tokenAddress: S.string,
+      chainId: S.number,
+    },
     output: S.string, // name
     cache: true, // Enable caching for better performance
   },
-  async ({ input: tokenAddress, context }) => {
+  async ({ input, context }) => {
+    const { tokenAddress, chainId } = input;
+    
+    // Create chain-specific client
+    const publicClient = createChainClient(chainId);
+    
     try {
       // Static definitions overrides
       const staticDefinition = getStaticDefinition(tokenAddress);
@@ -207,11 +228,15 @@ export const getTokenName = experimental_createEffect(
 export const getTokenDecimals = experimental_createEffect(
   {
     name: "getTokenDecimals",
-    input: S.string, // token address
+    input: {
+      tokenAddress: S.string,
+      chainId: S.number,
+    },
     output: S.bigint, // decimals (required, but we'll handle failures gracefully)
     cache: true, // Enable caching for better performance
   },
-  async ({ input: tokenAddress, context }) => {
+  async ({ input, context }) => {
+    const { tokenAddress, chainId } = input;
     try {
       // Static definitions overrides
       const staticDefinition = getStaticDefinition(tokenAddress);
@@ -219,6 +244,9 @@ export const getTokenDecimals = experimental_createEffect(
         // Using static definition
         return BigInt(staticDefinition.decimals);
       }
+
+      // Create chain-specific client
+      const publicClient = createChainClient(chainId);
 
       const decimals = await publicClient.readContract({
         address: tokenAddress as `0x${string}`,
@@ -245,17 +273,24 @@ export const getTokenDecimals = experimental_createEffect(
 export const getTokenTotalSupply = experimental_createEffect(
   {
     name: "getTokenTotalSupply",
-    input: S.string, // token address
+    input: {
+      tokenAddress: S.string,
+      chainId: S.number,
+    },
     output: S.bigint, // total supply
     cache: true, // Enable caching for better performance
   },
-  async ({ input: tokenAddress, context }) => {
+  async ({ input, context }) => {
+    const { tokenAddress, chainId } = input;
     try {
       // Skip specific tokens that have issues with totalSupply
       if (SKIP_TOTAL_SUPPLY.includes(tokenAddress.toLowerCase())) {
         // Skipping totalSupply (in SKIP_TOTAL_SUPPLY list)
         return ZERO_BI;
       }
+
+      // Create chain-specific client
+      const publicClient = createChainClient(chainId);
 
       const totalSupply = await publicClient.readContract({
         address: tokenAddress as `0x${string}`,

@@ -2270,7 +2270,174 @@ export async function updateTokenDayData() {
 
 **This step is critical for preventing database operation failures and ensuring data integrity.**
 
-## **23. Final Migration Verification: TODO Cleanup and Logic Verification**
+## **23. Handling Subgraph Array Access Patterns**
+
+**IMPORTANT: When the subgraph accesses arrays from relational entities, Envio requires a different approach.**
+
+### **The Problem:**
+**Subgraph pattern:**
+```typescript
+// Subgraph can directly access entity arrays
+transaction.mints.push(mint);
+transaction.burns.push(burn);
+transaction.swaps.push(swap);
+```
+
+**Envio limitation:**
+- `@derivedFrom` arrays are **virtual fields** - they don't exist in generated types
+- You **cannot directly access** `transaction.mints`, `transaction.burns`, etc.
+- These arrays are populated automatically by Envio when querying the API
+
+### **The Solution:**
+**Use `context.Entity.getWhere.fieldName.eq(value)` to query for related entities:**
+
+```typescript
+// ❌ WRONG - Trying to access virtual arrays directly
+const mints = transaction.mints; // This will NOT work
+const burns = transaction.burns; // This will NOT work
+
+// ✅ CORRECT - Query for related entities using indexed fields
+const mint = await context.Mint.getWhere.transaction_id.eq(transactionId);
+const burn = await context.Burn.getWhere.transaction_id.eq(transactionId);
+const swap = await context.Swap.getWhere.transaction_id.eq(transactionId);
+```
+
+### **Example Implementation:**
+```typescript
+// When you need to find existing entities by transaction
+const existingMint = await context.Mint.getWhere.transaction_id.eq(transactionId);
+const existingBurn = await context.Burn.getWhere.transaction_id.eq(transactionId);
+
+if (existingMint) {
+  // Update existing mint entity
+  const updatedMint: Mint = {
+    ...existingMint,
+    amount0: event.params.amount0,
+    amount1: event.params.amount1,
+    // ... other updates
+  };
+  context.Mint.set(updatedMint);
+} else {
+  // Create new mint entity
+  const newMint: Mint = {
+    id: mintId,
+    transaction_id: transactionId,
+    // ... other fields
+  };
+  context.Mint.set(newMint);
+}
+```
+
+### **Key Points:**
+- **Use `context.Entity.getWhere.fieldName.eq(value)`** for querying related entities
+- **This simulates the subgraph's array access** by finding entities that reference the current entity
+- **Always check if entities exist** before updating or creating
+- **Use the spread operator** when updating existing entities (they're read-only)
+
+## **24. Final Migration Verification: Handler and Helper Function Logic Review**
+
+**🚨 CRITICAL: This is the final step to ensure complete migration accuracy**
+
+### **Step 1: Systematic Handler Logic Review**
+**Go through each handler in each file one by one:**
+
+1. **For each handler, compare the logic to the subgraph implementation**
+2. **Identify any missing logic or unnecessary logic**
+3. **Update the handler accordingly**
+4. **Run the same check again on the updated code** (you'll likely find something else/new)
+5. **Repeat this process until the logic is correct**
+6. **Do this slowly, one by one, for every handler**
+
+**Why this iterative approach is critical:**
+- **First pass** often misses subtle logic differences
+- **Second pass** reveals issues introduced by the first pass
+- **Multiple iterations** ensure complete accuracy
+- **Slow, methodical review** prevents missing critical details
+
+### **Step 2: Systematic Helper Function Logic Review**
+**Go through each helper function in every file one by one:**
+
+1. **For each helper function, compare the logic to the subgraph implementation**
+2. **Identify any missing logic or unnecessary logic**
+3. **Update the helper function accordingly**
+4. **Run the same check again on the updated code**
+5. **Repeat this process until the logic is correct**
+6. **Do this slowly, one by one, for every helper function**
+
+### **Step 3: MDC File Consultation**
+**When uncertain about something, ALWAYS consult the MDC file:**
+
+- **Check existing solutions** for similar problems
+- **Reference the quality check checklist** to avoid common mistakes
+- **Look for similar examples** in the MDC file
+- **Use documented Envio patterns** instead of guessing
+
+### **Step 4: Implementation Order**
+**Follow this order for maximum efficiency:**
+
+1. **Start with simple handlers** - those with minimal business logic
+2. **Move to complex handlers** - those with extensive calculations or multiple entity updates
+3. **Review helper functions** - after handlers are complete
+4. **Final integration check** - ensure all pieces work together
+
+### **Step 5: Verification Checklist**
+**After each handler/function review, verify:**
+
+- [ ] **Logic matches subgraph exactly** - no missing or extra logic
+- [ ] **All edge cases handled** - same conditional branches as subgraph
+- [ ] **Entity operations correct** - proper loading, updating, saving
+- [ ] **Helper function calls complete** - all required functions called
+- [ ] **Error handling matches** - same try/catch and validation logic
+- [ ] **Calculations identical** - same mathematical operations and precision
+
+### **Example of Complete Logic Review:**
+```typescript
+// ❌ BEFORE - Missing logic from subgraph
+export async function handleMint(event: any, context: any) {
+  const mint: Mint = {
+    id: mintId,
+    amount0: event.params.amount0,
+    amount1: event.params.amount1,
+    // Missing: sender, to, feeTo, feeLiquidity, amountUSD calculations
+  };
+  context.Mint.set(mint);
+}
+
+// ✅ AFTER - Complete logic matching subgraph
+export async function handleMint(event: any, context: any) {
+  // Load existing mint entity (created by Transfer handler)
+  const existingMint = await context.Mint.getWhere.transaction_id.eq(transactionId);
+  
+  if (existingMint) {
+    // Update existing mint with complete data
+    const updatedMint: Mint = {
+      ...existingMint,
+      sender: event.params.sender,
+      to: event.params.to,
+      amount0: event.params.amount0,
+      amount1: event.params.amount1,
+      feeTo: feeToAddress,
+      feeLiquidity: calculatedFeeLiquidity,
+      amountUSD: calculatedAmountUSD,
+      logIndex: event.logIndex,
+    };
+    context.Mint.set(updatedMint);
+  }
+  
+  // Update all related entities (token0, token1, pair, factory)
+  // ... complete implementation matching subgraph
+}
+```
+
+### **Why This Step is Critical:**
+- **Ensures complete migration** - no functionality is lost
+- **Maintains data accuracy** - same business logic as original
+- **Prevents runtime errors** - all edge cases are handled
+- **Guarantees compatibility** - same behavior as original subgraph
+
+**This systematic review is the final quality gate before your migration is production-ready.**
+
+## **25. Final Migration Verification: TODO Cleanup and Logic Verification**
 
 **CRITICAL: This is the final step to ensure migration completeness**
 

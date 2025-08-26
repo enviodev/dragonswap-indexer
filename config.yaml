@@ -55,6 +55,7 @@ networks:
 #   - name: Factory
 #     address:
 #     - 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6
+#   - name: Pair
 # - id: 130  # BSC Testnet
 #   start_block: 0  # Testnet - no specific start block needed
 #   contracts:
