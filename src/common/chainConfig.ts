@@ -2,10 +2,6 @@
 // Dynamically loads chain-specific configurations based on chainId
 
 import * as seiConfig from "../../config/sei/chain";
-import * as maticConfig from "../../config/matic/chain";
-import * as bscConfig from "../../config/bsc/chain";
-import * as baseConfig from "../../config/base/chain";
-import * as monadTestnetConfig from "../../config/10143/chain";
 
 export interface ChainConfig {
   FACTORY_ADDRESS: string;
