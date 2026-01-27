@@ -18,6 +18,12 @@ type UniswapFactory {
 
   # transactions
   txCount: BigInt!
+
+  # extra fields from dragon swap subgraph
+  mintCount: BigInt!
+  swapCount: BigInt!
+  burnCount: BigInt!
+  feesUSD: BigDecimal!
 }
 
 type Token {
@@ -52,6 +58,10 @@ type Token {
   pairDayDataQuote: [PairDayData!]! @derivedFrom(field: "token1")
   pairBase: [Pair!]! @derivedFrom(field: "token0")
   pairQuote: [Pair!]! @derivedFrom(field: "token1")
+
+  # extra fields from dragon swap subgraph
+  priceUSD: BigDecimal
+  feesUSD: BigDecimal!
 }
 
 type Pair {
@@ -93,6 +103,18 @@ type Pair {
   mints: [Mint!]! @derivedFrom(field: "pair")
   burns: [Burn!]! @derivedFrom(field: "pair")
   swaps: [Swap!]! @derivedFrom(field: "pair")
+
+  # extra fields from dragon swap subgraph
+  volumeAmount0In: BigDecimal!
+  volumeAmount1In: BigDecimal!
+  feesUSD: BigDecimal!
+  mintCount: BigInt!
+  swapCount: BigInt!
+  burnCount: BigInt!
+
+  liquidityPositions: [LiquidityPosition!]! @derivedFrom(field: "pair")
+  liquidityPositionSnapshots: [LiquidityPositionSnapshot!]!
+    @derivedFrom(field: "pair")
 }
 
 type User {
@@ -109,6 +131,13 @@ type Transaction {
   mints: [Mint!]! @derivedFrom(field: "transaction")
   burns: [Burn!]! @derivedFrom(field: "transaction")
   swaps: [Swap!]! @derivedFrom(field: "transaction")
+
+  # Extra fields from dragon swap subgraph
+  from: String!
+  to: String!
+  mintCount: BigInt!
+  swapCount: BigInt!
+  burnCount: BigInt!
 }
 
 type Mint {
@@ -133,6 +162,10 @@ type Mint {
   # optional fee fields, if a Transfer event is fired in _mintFee
   feeTo: String
   feeLiquidity: BigDecimal
+
+  # Extra fields from dragon swap subgraph
+  firstTokenUsdPrice: BigDecimal
+  secondTokenUsdPrice: BigDecimal
 }
 
 type Burn {
@@ -160,6 +193,10 @@ type Burn {
   # optional fee fields, if a Transfer event is fired in _mintFee
   feeTo: String
   feeLiquidity: BigDecimal
+
+  # Extra fields from dragon swap subgraph
+  firstTokenUsdPrice: BigDecimal
+  secondTokenUsdPrice: BigDecimal
 }
 
 type Swap {
@@ -176,6 +213,10 @@ type Swap {
   amount1In: BigDecimal!
   amount0Out: BigDecimal!
   amount1Out: BigDecimal!
+
+  firstTokenUsdPrice: BigDecimal
+  secondTokenUsdPrice: BigDecimal
+
   to: String!
   logIndex: BigInt
 
@@ -263,12 +304,68 @@ type TokenDayData {
 
   # price stats
   priceUSD: BigDecimal!
+
+  dailyFeesUSD: BigDecimal!
 }
-
-
 
 type PairTokenLookup {
   id: ID!
   pair: Pair!
 }
 
+# extra fields from dragon swap subgraph
+
+type LiquidityPositionSnapshot {
+  id: ID!
+  liquidityPosition: LiquidityPosition!
+  timestamp: Int! # saved for fast historical lookups
+  block: Int! # saved for fast historical lookups
+  user: User! # reference to user
+  pair: Pair! # reference to pair
+  token0PriceUSD: BigDecimal! # snapshot of token0 price
+  token1PriceUSD: BigDecimal! # snapshot of token1 price
+  reserve0: BigDecimal! # snapshot of pair token0 reserves
+  reserve1: BigDecimal! # snapshot of pair token1 reserves
+  reserveUSD: BigDecimal! # snapshot of pair reserves in USD
+  liquidityTokenTotalSupply: BigDecimal! # snapshot of pool token supply
+  liquidityTokenBalance: BigDecimal! # snapshot of users pool token balance
+}
+
+type LiquidityPosition {
+  id: ID!
+  user: User!
+  pair: Pair!
+  liquidityTokenBalance: BigDecimal!
+}
+
+type PairTransfer {
+  # hash-srcAddress-blockNumber-toAddress
+  id: ID!
+  pairAddress: String!
+  fromAddress: String!
+  toAddress: String!
+
+  # creation stats
+  blockNumber: BigInt!
+  timestamp: BigInt!
+
+  amount: BigDecimal!
+}
+
+type UniswapHourData {
+  id: ID! # timestamp rounded to current day by dividing by 86400
+  date: Int!
+
+  hourlyVolumeETH: BigDecimal!
+  hourlyVolumeUSD: BigDecimal!
+  hourlyVolumeUntracked: BigDecimal!
+  hourlyFeesUSD: BigDecimal!
+
+  totalVolumeETH: BigDecimal!
+  totalLiquidityETH: BigDecimal!
+  totalVolumeUSD: BigDecimal! # Accumulate at each trade, not just calculated off whatever totalVolume is. making it more accurate as it is a live conversion
+  totalUntrackedVolumeUSD: BigDecimal!
+  totalLiquidityUSD: BigDecimal!
+
+  txCount: BigInt!
+}

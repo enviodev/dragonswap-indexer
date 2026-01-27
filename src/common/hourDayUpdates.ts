@@ -13,27 +13,28 @@ import {
   TokenDayData_t,
   Token_t,
   Bundle_t,
+  UniswapHourData_t,
 } from "generated/src/db/Entities.gen";
+import { HandlerContext } from "generated/src/Types";
 
 export async function updateUniswapDayData(
   event: any,
-  context: any,
-  chainId: string
+  context: HandlerContext,
 ): Promise<UniswapDayData_t> {
-      const factoryAddress = getFactoryAddress(Number(chainId));
-    const uniswap = await context.UniswapFactory.get(`${chainId}-${factoryAddress}`);
+  const factoryAddress = getFactoryAddress();
+  const uniswap = await context.UniswapFactory.get(`${factoryAddress}`);
   if (!uniswap) {
-    throw new Error('Factory not found for updateUniswapDayData');
+    throw new Error("Factory not found for updateUniswapDayData");
   }
 
   const timestamp = Number(event.block.timestamp);
   const dayID = Math.floor(timestamp / 86400);
   const dayStartTimestamp = dayID * 86400;
-  let uniswapDayData = await context.UniswapDayData.get(`${chainId}-${dayID}`);
+  let uniswapDayData = await context.UniswapDayData.get(`${dayID}`);
 
   if (!uniswapDayData) {
     uniswapDayData = {
-      id: `${chainId}-${dayID}`,
+      id: `${dayID}`,
       date: dayStartTimestamp, // Int field - remove BigInt wrapper
       dailyVolumeUSD: ZERO_BD,
       dailyVolumeETH: ZERO_BD,
@@ -46,27 +47,74 @@ export async function updateUniswapDayData(
     };
   }
 
-  uniswapDayData.totalLiquidityUSD = uniswap.totalLiquidityUSD;
-  uniswapDayData.totalLiquidityETH = uniswap.totalLiquidityETH;
-  uniswapDayData.txCount = uniswap.txCount;
-  context.UniswapDayData.set(uniswapDayData);
+  const updateData = {
+    ...uniswapDayData,
+    totalVolumeUSD: uniswap.totalVolumeUSD,
+    totalVolumeETH: uniswap.totalVolumeETH,
+    txCount: uniswap.txCount,
+  };
+  context.UniswapDayData.set(updateData);
 
-  return uniswapDayData;
+  return updateData;
+}
+
+export async function updateUniswapHourData(
+  event: any,
+  context: HandlerContext,
+): Promise<UniswapHourData_t> {
+  const factoryAddress = getFactoryAddress();
+  const uniswap = await context.UniswapFactory.get(`${factoryAddress}`);
+  if (!uniswap) {
+    throw new Error("Factory not found for updateUniswapDayData");
+  }
+
+  const timestamp = Number(event.block.timestamp);
+  const hourID = Math.floor(timestamp / 3600);
+  const hourStartTimestamp = hourID * 3600;
+  let uniswapHourData = await context.UniswapHourData.get(`${hourID}`);
+
+  if (!uniswapHourData) {
+    uniswapHourData = {
+      id: `${hourID}`,
+      date: hourStartTimestamp, // Int field - remove BigInt wrapper
+      hourlyVolumeUSD: ZERO_BD,
+      hourlyVolumeETH: ZERO_BD,
+      hourlyVolumeUntracked: ZERO_BD,
+      hourlyFeesUSD: ZERO_BD,
+
+      totalVolumeETH: ZERO_BD,
+      totalLiquidityETH: ZERO_BD,
+      totalVolumeUSD: ZERO_BD, // Add missing field from schema
+      totalLiquidityUSD: ZERO_BD,
+      totalUntrackedVolumeUSD: ZERO_BD,
+      txCount: ZERO_BI,
+    };
+  }
+
+  const updatedData = {
+    ...uniswapHourData,
+    totalLiquidityUSD: uniswap.totalLiquidityUSD,
+    totalLiquidityETH: uniswap.totalLiquidityETH,
+    txCount: uniswap.txCount,
+  };
+
+  context.UniswapHourData.set(updatedData);
+
+  return updatedData;
 }
 
 export async function updatePairDayData(
   pair: any,
   event: any,
   context: any,
-  chainId: string
 ): Promise<any> {
   const timestamp = Number(event.block.timestamp);
   const dayID = Math.floor(timestamp / 86400);
   const dayStartTimestamp = dayID * 86400;
-  
+
   // Use pairAddress for ID generation and pairAddress field
-  const dayPairID = `${chainId}-${event.srcAddress}-${dayID}`;
-  
+  const dayPairID = `${event.srcAddress}-${dayID}`;
+
   let pairDayData = await context.PairDayData.get(dayPairID);
 
   if (!pairDayData) {
@@ -93,15 +141,15 @@ export async function updatePairDayData(
   }
 
   // Update all fields as strings
-  pairDayData.totalSupply = pair.totalSupply
-  pairDayData.reserve0 = pair.reserve0
-  pairDayData.reserve1 = pair.reserve1
-  pairDayData.reserveUSD = pair.reserveUSD
-  
+  pairDayData.totalSupply = pair.totalSupply;
+  pairDayData.reserve0 = pair.reserve0;
+  pairDayData.reserve1 = pair.reserve1;
+  pairDayData.reserveUSD = pair.reserveUSD;
+
   // Update dailyTxns as BigInt
   const currentTxns = pairDayData.dailyTxns;
   pairDayData.dailyTxns = currentTxns + ONE_BI;
-  
+
   context.PairDayData.set(pairDayData);
 
   return pairDayData;
@@ -111,19 +159,18 @@ export async function updatePairHourData(
   pair: any,
   event: any,
   context: any,
-  chainId: string
 ): Promise<any> {
   const timestamp = Number(event.block.timestamp);
   const hourIndex = Math.floor(timestamp / 3600);
   const hourStartUnix = hourIndex * 3600;
-  const hourPairID = `${chainId}-${event.srcAddress}-${hourIndex}`;
+  const hourPairID = `${event.srcAddress}-${hourIndex}`;
   let pairHourData = await context.PairHourData.get(hourPairID);
 
   if (!pairHourData) {
     pairHourData = {
       id: hourPairID,
       hourStartUnix: hourStartUnix,
-      pair_id: `${chainId}-${event.srcAddress}`, // Use pair_id for relationship
+      pair_id: `${event.srcAddress}`, // Use pair_id for relationship
       hourlyVolumeToken0: ZERO_BD,
       hourlyVolumeToken1: ZERO_BD,
       hourlyVolumeUSD: ZERO_BD,
@@ -139,7 +186,7 @@ export async function updatePairHourData(
   pairHourData.reserve0 = pair.reserve0;
   pairHourData.reserve1 = pair.reserve1;
   pairHourData.reserveUSD = pair.reserveUSD;
-  
+
   pairHourData.hourlyTxns = pairHourData.hourlyTxns + ONE_BI;
   context.PairHourData.set(pairHourData);
 
@@ -150,17 +197,16 @@ export async function updateTokenDayData(
   token: any,
   event: any,
   context: any,
-  chainId: string
 ): Promise<any> {
-  const bundle = await context.Bundle.get(`${chainId}-1`);
+  const bundle = await context.Bundle.get(`1`);
   if (!bundle) {
-    throw new Error('Bundle not found for updateTokenDayData');
+    throw new Error("Bundle not found for updateTokenDayData");
   }
 
   const timestamp = Number(event.block.timestamp);
   const dayID = Math.floor(timestamp / 86400);
   const dayStartTimestamp = dayID * 86400;
-  const tokenDayID = `${chainId}-${token.id}-${dayID}`;
+  const tokenDayID = `${token.id}-${dayID}`;
   let tokenDayData = await context.TokenDayData.get(tokenDayID);
 
   if (!tokenDayData) {
@@ -182,14 +228,11 @@ export async function updateTokenDayData(
   tokenDayData.priceUSD = token.derivedETH * bundle.ethPrice;
   tokenDayData.totalLiquidityToken = token.totalLiquidity;
   tokenDayData.totalLiquidityETH = token.totalLiquidity * token.derivedETH;
-  tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityETH * bundle.ethPrice;
-  
+  tokenDayData.totalLiquidityUSD =
+    tokenDayData.totalLiquidityETH * bundle.ethPrice;
+
   tokenDayData.dailyTxns = tokenDayData.dailyTxns + ONE_BI; // Use ONE_BI constant instead of BigInt(1)
   context.TokenDayData.set(tokenDayData);
 
   return tokenDayData;
 }
-
-
-
-

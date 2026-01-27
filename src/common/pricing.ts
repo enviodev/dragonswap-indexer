@@ -19,11 +19,11 @@ export function safeDiv(amount0: BigDecimal, amount1: BigDecimal): BigDecimal {
  * Get ETH price in USD using stable token pairs
  * Keeps the original logic for reliable pricing
  */
-export async function getEthPriceInUSD(context: any, chainId: number): Promise<BigDecimal> {
+export async function getEthPriceInUSD(context: any): Promise<BigDecimal> {
   // Get chain-specific configuration
-  const chainConfig = getChainConfig(chainId);
+  const chainConfig = getChainConfig();
   if (!chainConfig) {
-    context.log.warn(`Chain ${chainId} not supported for ETH pricing`);
+    context.log.warn(`Chain not supported for ETH pricing`);
     return ZERO_BD;
   }
 
@@ -31,7 +31,7 @@ export async function getEthPriceInUSD(context: any, chainId: number): Promise<B
   
   // If no stable token pairs configured for this chain, return 0
   if (STABLE_TOKEN_PAIRS.length === 0) {
-    context.log.warn(`No stable token pairs configured for chain ${chainId}`);
+    context.log.warn(`No stable token pairs configured for chain`);
     return ZERO_BD;
   }
 
@@ -45,10 +45,10 @@ export async function getEthPriceInUSD(context: any, chainId: number): Promise<B
   // Load stable token pairs and calculate total liquidity
   for (let i = 0; i < STABLE_TOKEN_PAIRS.length; i++) {
     // Construct chainId-prefixed pair ID for multichain support
-    const pairId = `${chainId}-${STABLE_TOKEN_PAIRS[i]}`;
+    const pairId = `${STABLE_TOKEN_PAIRS[i]}`;
     const stableTokenPair = await context.Pair.get(pairId);
     if (stableTokenPair) {
-      stableTokenIsToken0[i] = stableTokenPair.token1_id === `${chainId}-${REFERENCE_TOKEN}`;
+      stableTokenIsToken0[i] = stableTokenPair.token1_id === `${REFERENCE_TOKEN}`;
       if (stableTokenIsToken0[i]) {
         stableTokenReserves[i] = stableTokenPair.reserve1;
         stableTokenPrices[i] = stableTokenPair.token0Price;  // Fixed: use token0Price when token1 is REFERENCE_TOKEN
@@ -83,9 +83,8 @@ export async function getTrackedVolumeUSD(
   token1: any,
   pair: any,
   context: any,
-  chainId: number
 ): Promise<BigDecimal> {
-  const bundle = await context.Bundle.get(`${chainId}-1`);
+  const bundle = await context.Bundle.get(`1`);
   if (!bundle || !bundle.ethPrice) {
     return ZERO_BD;
   }
@@ -105,7 +104,7 @@ export async function getTrackedVolumeUSD(
     const reserve1USD = pair.reserve1.times(price1);
     
     // Get chain-specific minimum threshold
-    const chainConfig = getChainConfig(chainId);
+    const chainConfig = getChainConfig();
     const minThreshold = chainConfig ? new BigDecimal(chainConfig.MINIMUM_USD_THRESHOLD_NEW_PAIRS) : new BigDecimal('10000');
     
     // Check if reserves meet minimum threshold for data quality
@@ -129,9 +128,8 @@ export async function getTrackedLiquidityUSD(
   token0: any,
   token1: any,
   context: any,
-  chainId: number
 ): Promise<BigDecimal> {
-  const bundle = await context.Bundle.get(`${chainId}-1`);
+  const bundle = await context.Bundle.get(`1`);
   if (!bundle || !bundle.ethPrice) {
     return ZERO_BD;
   }
@@ -158,9 +156,8 @@ export async function getTokenTrackedLiquidityUSD(
   companionTokenAmount: BigDecimal,
   companionToken: any,
   context: any,
-  chainId: number
 ): Promise<BigDecimal> {
-  const bundle = await context.Bundle.get(`${chainId}-1`);
+  const bundle = await context.Bundle.get(`1`);
   if (!bundle || !bundle.ethPrice) {
     return ZERO_BD;
   }
@@ -183,35 +180,35 @@ export async function getTokenTrackedLiquidityUSD(
  * Implements the complete logic from original subgraph using WHITELIST for pricing accuracy
  * Uses PairTokenLookup entities to find reliable pricing sources
  */
-export async function findEthPerToken(token: any, context: any, chainId: number): Promise<BigDecimal> {
+export async function findEthPerToken(token: any, context: any): Promise<BigDecimal> {
   // Get chain-specific configuration
-  const chainConfig = getChainConfig(chainId);
+  const chainConfig = getChainConfig();
   if (!chainConfig) {
-    context.log.warn(`Chain ${chainId} not supported for ETH pricing`);
+    context.log.warn(`Chain not supported for ETH pricing`);
     return ZERO_BD;
   }
 
   const { REFERENCE_TOKEN, STABLECOINS, WHITELIST, MINIMUM_LIQUIDITY_THRESHOLD_ETH } = chainConfig;
   
-  if (token.id === `${chainId}-${REFERENCE_TOKEN}`) {
+  if (token.id === `${REFERENCE_TOKEN}`) {
     return ONE_BD;
   }
 
   // Load bundle for ETH price
-  const bundle = await context.Bundle.get(`${chainId}-1`);
+  const bundle = await context.Bundle.get(`1`);
   if (!bundle) {
     return ZERO_BD;
   }
 
   // For stablecoins, calculate based on ETH price
-  if (STABLECOINS.includes(token.id.replace(`${chainId}-`, ''))) {
+  if (STABLECOINS.includes(token.id)) {
     return safeDiv(ONE_BD, bundle.ethPrice);
   }
 
   // Loop through whitelist and check if paired with any
   // This ensures we only use reliable pricing sources for data accuracy
   for (let i = 0; i < WHITELIST.length; ++i) {
-    const pairLookupId = `${chainId}-${token.id}-${chainId}-${WHITELIST[i]}`;
+    const pairLookupId = `${token.id}-${WHITELIST[i]}`;
     const pairLookup = await context.PairTokenLookup.get(pairLookupId);
     
     if (pairLookup) {

@@ -16,112 +16,22 @@ export interface ChainRpcConfig {
 
 // Environment variable mapping for RPC URLs
 const RPC_URLS = {
-  1: process.env.ENVIO_CHAIN_1_RPC_URL,
-  137: process.env.ENVIO_CHAIN_137_RPC_URL,
-  56: process.env.ENVIO_CHAIN_56_RPC_URL,
-  8453: process.env.ENVIO_CHAIN_8453_RPC_URL,
-  42161: process.env.ENVIO_CHAIN_42161_RPC_URL,
-  43114: process.env.ENVIO_CHAIN_43114_RPC_URL,
-  10: process.env.ENVIO_CHAIN_10_RPC_URL,
-  10143: process.env.ENVIO_CHAIN_10143_RPC_URL,
+  1329: process.env.ENVIO_CHAIN_1329_RPC_URL,
 } as const;
 
 // Chain configurations
 export const CHAIN_CONFIGS: Record<number, ChainRpcConfig> = {
-  1: {
-    chainId: 1,
-    name: 'Ethereum',
-    network: 'mainnet',
+  1329: {
+    chainId: 1329,
+    name: "Sei",
+    network: "sei",
     nativeCurrency: {
       decimals: 18,
-      name: 'Ether',
-      symbol: 'ETH',
+      name: "Sei",
+      symbol: "SEI",
     },
-    rpcUrl: RPC_URLS[1],
-    blockExplorer: 'https://etherscan.io',
-  },
-  137: {
-    chainId: 137,
-    name: 'Polygon',
-    network: 'matic',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'MATIC',
-      symbol: 'MATIC',
-    },
-    rpcUrl: RPC_URLS[137],
-    blockExplorer: 'https://polygonscan.com',
-  },
-  56: {
-    chainId: 56,
-    name: 'BNB Smart Chain',
-    network: 'bsc',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'BNB',
-      symbol: 'BNB',
-    },
-    rpcUrl: RPC_URLS[56],
-    blockExplorer: 'https://bscscan.com',
-  },
-  8453: {
-    chainId: 8453,
-    name: 'Base',
-    network: 'base',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'Ether',
-      symbol: 'ETH',
-    },
-    rpcUrl: RPC_URLS[8453],
-    blockExplorer: 'https://basescan.org',
-  },
-  42161: {
-    chainId: 42161,
-    name: 'Arbitrum One',
-    network: 'arbitrum',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'Ether',
-      symbol: 'ETH',
-    },
-    rpcUrl: RPC_URLS[42161],
-    blockExplorer: 'https://arbiscan.io',
-  },
-  43114: {
-    chainId: 43114,
-    name: 'Avalanche',
-    network: 'avalanche',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'AVAX',
-      symbol: 'AVAX',
-    },
-    rpcUrl: RPC_URLS[43114],
-    blockExplorer: 'https://snowtrace.io',
-  },
-  10: {
-    chainId: 10,
-    name: 'Optimism',
-    network: 'optimism',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'Ether',
-      symbol: 'ETH',
-    },
-    rpcUrl: RPC_URLS[10],
-    blockExplorer: 'https://optimistic.etherscan.io',
-  },
-  10143: {
-    chainId: 10143,
-    name: 'Monad Testnet',
-    network: 'monad-testnet',
-    nativeCurrency: {
-      decimals: 18,
-      name: 'MON',
-      symbol: 'NATIVE',
-    },
-    rpcUrl: RPC_URLS[10143],
+    rpcUrl: RPC_URLS[1329],
+    blockExplorer: "https://seiscan.io",
   },
 };
 
@@ -131,12 +41,14 @@ export function getChainConfig(chainId: number): ChainRpcConfig {
   if (!config) {
     throw new Error(`Unsupported chain ID: ${chainId}`);
   }
-  
+
   // Validate that RPC URL is provided
   if (!config.rpcUrl) {
-    throw new Error(`RPC URL not configured for chain ID ${chainId}. Please set ENVIO_CHAIN_${chainId}_RPC_URL in your .env file.`);
+    throw new Error(
+      `RPC URL not configured for chain ID ${chainId}. Please set ENVIO_CHAIN_${chainId}_RPC_URL in your .env file.`,
+    );
   }
-  
+
   return config;
 }
 
