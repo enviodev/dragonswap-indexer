@@ -33,4 +33,4 @@ If you're running this indexer for the first time or on local for development, y
 - [x] Sync
 - [x] Mint
 - [x] Burn
-- [ ] Swap
+- [x] Swap

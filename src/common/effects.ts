@@ -8,6 +8,9 @@ import { getStaticDefinition, SKIP_TOTAL_SUPPLY } from "./tokenDefinition";
 import { ZERO_BI } from "./constants";
 import { getChainConfig } from "./chainRpcConfig";
 
+// update RPS limits and timeouts to be more robust
+const RATE_LIMIT_CALLS_PER_SECOND = 24;
+
 // Load environment variables
 dotenv.config();
 
@@ -109,7 +112,7 @@ export const getTokenSymbol = createEffect(
       tokenAddress: S.string,
     },
     rateLimit: {
-      calls: 24,
+      calls: RATE_LIMIT_CALLS_PER_SECOND,
       per: "second",
     },
     output: S.string, // symbol
@@ -187,7 +190,7 @@ export const getTokenName = createEffect(
       tokenAddress: S.string,
     },
     rateLimit: {
-      calls: 24,
+      calls: RATE_LIMIT_CALLS_PER_SECOND,
       per: "second",
     },
     output: S.string, // name
@@ -258,7 +261,7 @@ export const getTokenDecimals = createEffect(
       tokenAddress: S.string,
     },
     rateLimit: {
-      calls: 24,
+      calls: RATE_LIMIT_CALLS_PER_SECOND,
       per: "second",
     },
     output: S.bigint, // decimals (required, but we'll handle failures gracefully)
@@ -309,7 +312,7 @@ export const getTokenTotalSupply = createEffect(
       tokenAddress: S.string,
     },
     rateLimit: {
-      calls: 24,
+      calls: RATE_LIMIT_CALLS_PER_SECOND,
       per: "second",
     },
     output: S.bigint, // total supply
@@ -359,7 +362,7 @@ export const getTokenBalance = createEffect(
       userAddress: S.string,
     },
     rateLimit: {
-      calls: 24,
+      calls: RATE_LIMIT_CALLS_PER_SECOND,
       per: "second",
     },
     output: S.bigint, // balance

@@ -14,6 +14,7 @@ import {
   Token_t,
   Bundle_t,
   UniswapHourData_t,
+  Pair_t,
 } from "generated/src/db/Entities.gen";
 import { HandlerContext } from "generated/src/Types";
 
@@ -44,6 +45,8 @@ export async function updateUniswapDayData(
       totalLiquidityUSD: ZERO_BD,
       totalLiquidityETH: ZERO_BD,
       txCount: ZERO_BI,
+      dailyFeesUSD: ZERO_BD,
+      totalUntrackedVolumeUSD: ZERO_BD,
     };
   }
 
@@ -104,10 +107,10 @@ export async function updateUniswapHourData(
 }
 
 export async function updatePairDayData(
-  pair: any,
+  pair: Pair_t,
   event: any,
-  context: any,
-): Promise<any> {
+  context: HandlerContext,
+): Promise<PairDayData_t> {
   const timestamp = Number(event.block.timestamp);
   const dayID = Math.floor(timestamp / 86400);
   const dayStartTimestamp = dayID * 86400;
@@ -137,18 +140,19 @@ export async function updatePairDayData(
       dailyVolumeUSD: ZERO_BD,
       // Daily transactions as BigInt
       dailyTxns: ZERO_BI, // BigInt field
+      dailyFeesUSD: ZERO_BD,
     };
   }
 
   // Update all fields as strings
-  pairDayData.totalSupply = pair.totalSupply;
-  pairDayData.reserve0 = pair.reserve0;
-  pairDayData.reserve1 = pair.reserve1;
-  pairDayData.reserveUSD = pair.reserveUSD;
-
-  // Update dailyTxns as BigInt
-  const currentTxns = pairDayData.dailyTxns;
-  pairDayData.dailyTxns = currentTxns + ONE_BI;
+  pairDayData = {
+    ...pairDayData,
+    totalSupply: pair.totalSupply,
+    reserve0: pair.reserve0,
+    reserve1: pair.reserve1,
+    reserveUSD: pair.reserveUSD,
+    dailyTxns: pairDayData.dailyTxns + ONE_BI,
+  };
 
   context.PairDayData.set(pairDayData);
 
@@ -156,10 +160,10 @@ export async function updatePairDayData(
 }
 
 export async function updatePairHourData(
-  pair: any,
+  pair: Pair_t,
   event: any,
-  context: any,
-): Promise<any> {
+  context: HandlerContext,
+): Promise<PairHourData_t> {
   const timestamp = Number(event.block.timestamp);
   const hourIndex = Math.floor(timestamp / 3600);
   const hourStartUnix = hourIndex * 3600;
@@ -179,25 +183,28 @@ export async function updatePairHourData(
       reserve0: ZERO_BD,
       reserve1: ZERO_BD,
       reserveUSD: ZERO_BD,
+      hourlyFeesUSD: ZERO_BD,
     };
   }
 
-  pairHourData.totalSupply = pair.totalSupply;
-  pairHourData.reserve0 = pair.reserve0;
-  pairHourData.reserve1 = pair.reserve1;
-  pairHourData.reserveUSD = pair.reserveUSD;
+  pairHourData = {
+    ...pairHourData,
+    totalSupply: pair.totalSupply,
+    reserve0: pair.reserve0,
+    reserve1: pair.reserve1,
+    reserveUSD: pair.reserveUSD,
+    hourlyTxns: pairHourData.hourlyTxns + ONE_BI,
+  };
 
-  pairHourData.hourlyTxns = pairHourData.hourlyTxns + ONE_BI;
   context.PairHourData.set(pairHourData);
-
   return pairHourData;
 }
 
 export async function updateTokenDayData(
-  token: any,
+  token: Token_t,
   event: any,
-  context: any,
-): Promise<any> {
+  context: HandlerContext,
+): Promise<TokenDayData_t> {
   const bundle = await context.Bundle.get(`1`);
   if (!bundle) {
     throw new Error("Bundle not found for updateTokenDayData");
@@ -214,7 +221,7 @@ export async function updateTokenDayData(
       id: tokenDayID,
       date: dayStartTimestamp, // Int field - remove BigInt wrapper
       token_id: token.id, // Token! field - use token_id for relationship
-      priceUSD: token.derivedETH * bundle.ethPrice,
+      priceUSD: token.derivedETH.times(bundle.ethPrice),
       dailyVolumeToken: ZERO_BD,
       dailyVolumeETH: ZERO_BD,
       dailyVolumeUSD: ZERO_BD,
@@ -222,17 +229,19 @@ export async function updateTokenDayData(
       totalLiquidityUSD: ZERO_BD,
       totalLiquidityToken: ZERO_BD,
       totalLiquidityETH: ZERO_BD,
+      dailyFeesUSD: ZERO_BD,
     };
   }
 
-  tokenDayData.priceUSD = token.derivedETH * bundle.ethPrice;
-  tokenDayData.totalLiquidityToken = token.totalLiquidity;
-  tokenDayData.totalLiquidityETH = token.totalLiquidity * token.derivedETH;
-  tokenDayData.totalLiquidityUSD =
-    tokenDayData.totalLiquidityETH * bundle.ethPrice;
+  tokenDayData = {
+    ...tokenDayData,
+    priceUSD: token.derivedETH.times(bundle.ethPrice),
+    totalLiquidityToken: token.totalLiquidity,
+    totalLiquidityETH: token.totalLiquidity.times(token.derivedETH),
+    totalLiquidityUSD: tokenDayData.totalLiquidityETH.times(bundle.ethPrice),
+    dailyTxns: tokenDayData.dailyTxns + ONE_BI,
+  };
 
-  tokenDayData.dailyTxns = tokenDayData.dailyTxns + ONE_BI; // Use ONE_BI constant instead of BigInt(1)
   context.TokenDayData.set(tokenDayData);
-
   return tokenDayData;
 }

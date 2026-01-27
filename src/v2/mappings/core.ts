@@ -80,6 +80,7 @@ Pair.Transfer.handler(async ({ event, context }) => {
     if (!fromUser) {
       fromUser = {
         id: from,
+        usdSwapped: ZERO_BD,
       };
       context.User.set(fromUser);
     }
@@ -88,6 +89,7 @@ Pair.Transfer.handler(async ({ event, context }) => {
     if (!toUser) {
       toUser = {
         id: to,
+        usdSwapped: ZERO_BD,
       };
       context.User.set(toUser);
     }
@@ -872,9 +874,22 @@ Pair.Swap.handler(async ({ event, context }) => {
 
     // 12. Update daily/hourly data
     if (bundle) {
+      // calculate fees
+      let token0SwapFeeUsd;
+      let token1SwapFeeUsd;
+
+      if (token0.priceUSD && token1.priceUSD) {
+        token0SwapFeeUsd = amount0In.times(token0.priceUSD).times(FEE_PERCENT);
+        token1SwapFeeUsd = amount1In.times(token1.priceUSD).times(FEE_PERCENT);
+      }
+
       const pairDayData = await updatePairDayData(pair, event, context);
       const pairHourData = await updatePairHourData(pair, event, context);
-      const uniswapDayData = await updateUniswapDayData(event, context);
+      const uniswapDayData: UniswapDayData_t = await updateUniswapDayData(
+        event,
+        context,
+      );
+      const uniswapHourData = await updateUniswapHourData(event, context);
       const token0DayData = await updateTokenDayData(
         finalToken0 || updatedToken0,
         event,
@@ -897,8 +912,27 @@ Pair.Swap.handler(async ({ event, context }) => {
           // Update total volume fields (matches subgraph exactly)
           totalVolumeUSD: uniswapDayData.totalVolumeUSD.plus(trackedAmountUSD),
           totalVolumeETH: uniswapDayData.totalVolumeETH.plus(trackedAmountETH),
+          dailyFeesUSD: uniswapDayData.dailyFeesUSD.plus(
+            (token0SwapFeeUsd || ZERO_BD).plus(token1SwapFeeUsd || ZERO_BD),
+          ),
         };
         context.UniswapDayData.set(updatedUniswapDayData);
+      }
+
+      if (uniswapHourData) {
+        const updatedUniswapHourData = {
+          ...uniswapHourData,
+          hourlyVolumeUSD:
+            uniswapHourData.hourlyVolumeUSD.plus(trackedAmountUSD),
+          hourlyVolumeETH:
+            uniswapHourData.hourlyVolumeETH.plus(trackedAmountETH),
+          hourlyVolumeUntracked:
+            uniswapHourData.hourlyVolumeUntracked.plus(derivedAmountUSD),
+          hourlyFeesUSD: uniswapHourData.hourlyFeesUSD.plus(
+            (token0SwapFeeUsd || ZERO_BD).plus(token1SwapFeeUsd || ZERO_BD),
+          ),
+        };
+        context.UniswapHourData.set(updatedUniswapHourData);
       }
 
       // Swap-specific updating for PairDayData
@@ -908,6 +942,9 @@ Pair.Swap.handler(async ({ event, context }) => {
           dailyVolumeToken0: pairDayData.dailyVolumeToken0.plus(amount0Total),
           dailyVolumeToken1: pairDayData.dailyVolumeToken1.plus(amount1Total),
           dailyVolumeUSD: pairDayData.dailyVolumeUSD.plus(trackedAmountUSD),
+          dailyFeesUSD: pairDayData.dailyFeesUSD.plus(
+            (token0SwapFeeUsd || ZERO_BD).plus(token1SwapFeeUsd || ZERO_BD),
+          ),
         };
         context.PairDayData.set(updatedPairDayData);
       }
@@ -921,6 +958,9 @@ Pair.Swap.handler(async ({ event, context }) => {
           hourlyVolumeToken1:
             pairHourData.hourlyVolumeToken1.plus(amount1Total),
           hourlyVolumeUSD: pairHourData.hourlyVolumeUSD.plus(trackedAmountUSD),
+          hourlyFeesUSD: pairHourData.hourlyFeesUSD.plus(
+            (token0SwapFeeUsd || ZERO_BD).plus(token1SwapFeeUsd || ZERO_BD),
+          ),
         };
         context.PairHourData.set(updatedPairHourData);
       }
@@ -938,6 +978,9 @@ Pair.Swap.handler(async ({ event, context }) => {
               .times((finalToken0 || updatedToken0).derivedETH)
               .times(bundle.ethPrice),
           ),
+          dailyFeesUSD: token0DayData.dailyFeesUSD.plus(
+            token0SwapFeeUsd || ZERO_BD,
+          ),
         };
         context.TokenDayData.set(updatedToken0DayData);
       }
@@ -954,6 +997,9 @@ Pair.Swap.handler(async ({ event, context }) => {
             amount1Total
               .times((finalToken1 || updatedToken1).derivedETH)
               .times(bundle.ethPrice),
+          ),
+          dailyFeesUSD: token1DayData.dailyFeesUSD.plus(
+            token1SwapFeeUsd || ZERO_BD,
           ),
         };
         context.TokenDayData.set(updatedToken1DayData);
