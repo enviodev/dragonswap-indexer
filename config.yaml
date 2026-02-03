@@ -38,3 +38,4 @@ networks:
       - name: Pair
 unordered_multichain_mode: true
 preload_handlers: true
+address_format: checksum
