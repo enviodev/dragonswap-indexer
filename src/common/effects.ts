@@ -1,18 +1,22 @@
 // Effect API implementations for token metadata fetching
 // This replaces direct RPC calls with Envio's Effect API for better performance
 
-import { createEffect, S } from "envio";
+import { createEffect, EffectContext, S } from "envio";
 import { createPublicClient, http, parseAbi } from "viem";
 import * as dotenv from "dotenv";
 import { getStaticDefinition, SKIP_TOTAL_SUPPLY } from "./tokenDefinition";
 import { ZERO_BI } from "./constants";
 import { getChainConfig } from "./chainRpcConfig";
+import { HandlerContext } from "generated/src/Types";
 
-// update RPS limits and timeouts to be more robust
-const RATE_LIMIT_CALLS_PER_SECOND = 24;
 
 // Load environment variables
 dotenv.config();
+
+// update RPS limits and timeouts to be more robust
+const RATE_LIMIT_CALLS_PER_SECOND = process.env.RATE_LIMIT_CALLS_PER_SECOND
+  ? parseInt(process.env.RATE_LIMIT_CALLS_PER_SECOND)
+  : 24;
 
 // ERC20 ABI for basic token functions
 const ERC20_ABI = parseAbi([
@@ -79,7 +83,7 @@ function isNullEthValue(value: string): boolean {
 async function safeRpcCall<T>(
   callFn: () => Promise<T>,
   fallbackValue: T,
-  context: any,
+  context: EffectContext,
   tokenAddress: string,
   operation: string,
 ): Promise<T> {
