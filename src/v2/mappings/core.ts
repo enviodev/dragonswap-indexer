@@ -47,6 +47,7 @@ import {
   createLiquiditySnapshot,
 } from "../../common/dsHelpers";
 import { getTokenBalance } from "../../common/effects";
+import { toHex } from "viem";
 
 // Helper function to check if a mint is complete (matches subgraph logic)
 function isCompleteMint(mint: Mint_t): boolean {
@@ -123,7 +124,7 @@ Pair.Transfer.handler(async ({ event, context }) => {
     }
 
     // Pair Transfer logic
-    let pairTransferId = `${transactionId}-${event.srcAddress}-${event.srcAddress}-${event.block.number}-${event.params.to}`;
+    let pairTransferId = `${transactionId}${event.srcAddress.toLowerCase()}${event.srcAddress.toLowerCase()}0x${toHex(event.block.number)}${event.params.to.toLowerCase()}`;
     let pairTransfer = await context.PairTransfer.get(pairTransferId);
 
     if (!pairTransfer) {
