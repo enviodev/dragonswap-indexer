@@ -845,7 +845,7 @@ Pair.Swap.handler(async ({ event, context }) => {
       timestamp: BigInt(event.block.timestamp),
       pair_id: pair.id,
       sender: event.params.sender,
-      from: event.params.sender, // Use sender as from since 'from' doesn't exist
+      from: event.transaction.from?.toLowerCase() || "", // most of the time from will be available
       amount0In: amount0In,
       amount1In: amount1In,
       amount0Out: amount0Out,
