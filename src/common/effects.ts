@@ -115,12 +115,9 @@ export const getTokenSymbol = createEffect(
     input: {
       tokenAddress: S.string,
     },
-    rateLimit: {
-      calls: RATE_LIMIT_CALLS_PER_SECOND,
-      per: "second",
-    },
+    rateLimit: false,
     output: S.string, // symbol
-    cache: false, // Enable caching for better performance
+    cache: true, // Enable caching for better performance
   },
   async ({ input, context }) => {
     const chainId = 1329; // Sei chain ID
@@ -193,10 +190,7 @@ export const getTokenName = createEffect(
     input: {
       tokenAddress: S.string,
     },
-    rateLimit: {
-      calls: RATE_LIMIT_CALLS_PER_SECOND,
-      per: "second",
-    },
+    rateLimit: false,
     output: S.string, // name
     cache: true, // Enable caching for better performance
   },
@@ -264,10 +258,7 @@ export const getTokenDecimals = createEffect(
     input: {
       tokenAddress: S.string,
     },
-    rateLimit: {
-      calls: RATE_LIMIT_CALLS_PER_SECOND,
-      per: "second",
-    },
+    rateLimit: false,
     output: S.bigint, // decimals (required, but we'll handle failures gracefully)
     cache: true, // Enable caching for better performance
   },
@@ -315,10 +306,7 @@ export const getTokenTotalSupply = createEffect(
     input: {
       tokenAddress: S.string,
     },
-    rateLimit: {
-      calls: RATE_LIMIT_CALLS_PER_SECOND,
-      per: "second",
-    },
+    rateLimit: false,
     output: S.bigint, // total supply
     cache: true, // Enable caching for better performance
   },
@@ -365,10 +353,7 @@ export const getTokenBalance = createEffect(
       tokenAddress: S.string,
       userAddress: S.string,
     },
-    rateLimit: {
-      calls: RATE_LIMIT_CALLS_PER_SECOND,
-      per: "second",
-    },
+    rateLimit: false,
     output: S.bigint, // balance
     cache: false, // Disable caching for balances
   },
