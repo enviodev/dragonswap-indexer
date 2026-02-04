@@ -100,7 +100,7 @@ Factory.PairCreated.handler(async ({ event, context }) => {
         }
 
         token0 = {
-          id: `${event.params.token0}`,
+          id: `${event.params.token0.toLowerCase()}`,
           symbol: symbol0,
           name: name0,
           decimals: decimals0,
@@ -145,7 +145,7 @@ Factory.PairCreated.handler(async ({ event, context }) => {
         }
 
         token1 = {
-          id: `${event.params.token1}`,
+          id: `${event.params.token1.toLowerCase()}`,
           symbol: symbol1,
           name: name1,
           decimals: decimals1,
@@ -168,7 +168,7 @@ Factory.PairCreated.handler(async ({ event, context }) => {
 
     // 4. Create new Pair entity
     const pair: Pair_t = {
-      id: `${event.params.pair}`,
+      id: `${event.params.pair.toLowerCase()}`,
       token0_id: token0.id,
       token1_id: token1.id,
       reserve0: ZERO_BD,
