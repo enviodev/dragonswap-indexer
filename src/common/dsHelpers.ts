@@ -71,7 +71,7 @@ export async function createLiquiditySnapshot(
   }
 
   context.LiquidityPositionSnapshot.set({
-    id: `${position.id}-${timestamp.toString()}`,
+    id: `${position.id}${timestamp.toString()}`,
     liquidityPosition_id: position.id,
     timestamp: timestamp,
     block: event.block.number,
