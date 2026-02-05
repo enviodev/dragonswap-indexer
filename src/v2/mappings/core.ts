@@ -124,7 +124,7 @@ Pair.Transfer.handler(async ({ event, context }) => {
     }
 
     // Pair Transfer logic
-    let pairTransferId = `${transactionId}${event.srcAddress.toLowerCase()}${event.srcAddress.toLowerCase()}0x${toHex(event.block.number)}${event.params.to.toLowerCase()}`;
+    let pairTransferId = `${transactionId}${event.srcAddress.toLowerCase()}${event.srcAddress.toLowerCase()}${toHex(event.block.number)}${event.params.to.toLowerCase()}`;
     let pairTransfer = await context.PairTransfer.get(pairTransferId);
 
     if (!pairTransfer) {
@@ -480,6 +480,14 @@ Pair.Mint.handler(async ({ event, context }) => {
         .times(amount1)
         .plus(token0.derivedETH.times(amount0))
         .times(bundle.ethPrice);
+    } else {
+      context.log.warn(
+        `Bundle ETH Price: ${bundle?.ethPrice.toString()} for transaction ${transactionId}`,
+      );
+
+      console.log(
+        `Bundle ETH Price: ${bundle?.ethPrice.toString()} for transaction ${transactionId}`,
+      );
     }
 
     // 10. Update existing mint entity with amounts and sender
