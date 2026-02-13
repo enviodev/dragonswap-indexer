@@ -32,6 +32,7 @@ export async function getEthPriceInUSD(
   // Get chain-specific configuration
   const chainConfig = getChainConfig();
   if (!chainConfig) {
+    console.log(`Chain not supported for ETH pricing`);
     context.log.warn(`Chain not supported for ETH pricing`);
     return ZERO_BD;
   }
@@ -40,6 +41,7 @@ export async function getEthPriceInUSD(
 
   // If no stable token pairs configured for this chain, return 0
   if (STABLE_TOKEN_PAIRS.length === 0) {
+    console.log(`No stable token pairs configured for chain`);
     context.log.warn(`No stable token pairs configured for chain`);
     return ZERO_BD;
   }
@@ -56,17 +58,28 @@ export async function getEthPriceInUSD(
     // Construct chainId-prefixed pair ID for multichain support
     const pairId = `${STABLE_TOKEN_PAIRS[i]}`;
     const stableTokenPair = await context.Pair.get(pairId);
+    console.log(`pricing:getEthPriceInUSD - lookup pairId=${pairId} -> ${stableTokenPair ? 'found' : 'not found'}`);
     if (stableTokenPair) {
+      console.log(
+        `pricing:pair ${pairId} tokens: token0=${stableTokenPair.token0_id} token1=${stableTokenPair.token1_id} reserve0=${stableTokenPair.reserve0.toString()} reserve1=${stableTokenPair.reserve1.toString()}`,
+      );
       stableTokenIsToken0[i] =
         stableTokenPair.token1_id === `${REFERENCE_TOKEN}`;
+      console.log(`pricing:stableTokenIsToken0[${i}] = ${stableTokenIsToken0[i]}`);
       if (stableTokenIsToken0[i]) {
         stableTokenReserves[i] = stableTokenPair.reserve1;
         stableTokenPrices[i] = stableTokenPair.token0Price; // Fixed: use token0Price when token1 is REFERENCE_TOKEN
         totalLiquidityETH = totalLiquidityETH.plus(stableTokenPair.reserve1);
+        console.log(
+          `pricing:selected reserve=${stableTokenReserves[i].toString()} price=${stableTokenPrices[i].toString()} totalLiquidityETH=${totalLiquidityETH.toString()}`,
+        );
       } else {
         stableTokenReserves[i] = stableTokenPair.reserve0;
         stableTokenPrices[i] = stableTokenPair.token1Price; // Fixed: use token1Price when token0 is REFERENCE_TOKEN
         totalLiquidityETH = totalLiquidityETH.plus(stableTokenPair.reserve0);
+        console.log(
+          `pricing:selected reserve=${stableTokenReserves[i].toString()} price=${stableTokenPrices[i].toString()} totalLiquidityETH=${totalLiquidityETH.toString()}`,
+        );
       }
     }
     stableTokenPairs[i] = stableTokenPair;
@@ -80,13 +93,18 @@ export async function getEthPriceInUSD(
       stableTokenPrices[i] &&
       stableTokenReserves[i]
     ) {
+      console.log(
+        `pricing:weighting index=${i} reserve=${stableTokenReserves[i].toString()} price=${stableTokenPrices[i].toString()} totalLiquidityETH=${totalLiquidityETH.toString()}`,
+      );
       tokenPrice = tokenPrice.plus(
         stableTokenPrices[i].times(
           safeDiv(stableTokenReserves[i], totalLiquidityETH),
         ),
       );
+      console.log(`pricing:intermediate tokenPrice=${tokenPrice.toString()}`);
     }
   }
+  console.log(`Calculated ETH price in USD: ${tokenPrice.toString()}`);
   return tokenPrice;
 }
 
@@ -104,11 +122,13 @@ export async function getTrackedVolumeUSD(
 ): Promise<BigDecimal> {
   const bundle = await context.Bundle.get(`1`);
   if (!bundle || !bundle.ethPrice) {
+    context.log.warn(`Bundle or ETH price not found for volume calculation: getTrackedVolumeUSD function`);
     return ZERO_BD;
   }
 
   // Add null checks for derivedETH values
   if (!token0.derivedETH || !token1.derivedETH) {
+    context.log.warn(`Derived ETH price not found for tokens in volume calculation: getTrackedVolumeUSD function`);
     return ZERO_BD;
   }
 
