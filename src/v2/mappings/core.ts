@@ -124,7 +124,7 @@ Pair.Transfer.handler(async ({ event, context }) => {
     }
 
     // Pair Transfer logic
-    let pairTransferId = `${transactionId}${event.srcAddress.toLowerCase()}${event.srcAddress.toLowerCase()}0x${toHex(event.block.number)}${event.params.to.toLowerCase()}`;
+    let pairTransferId = `${transactionId}${event.srcAddress.toLowerCase()}${event.srcAddress.toLowerCase()}${toHex(event.block.number)}${event.params.to.toLowerCase()}`;
     let pairTransfer = await context.PairTransfer.get(pairTransferId);
 
     if (!pairTransfer) {
@@ -480,6 +480,16 @@ Pair.Mint.handler(async ({ event, context }) => {
         .times(amount1)
         .plus(token0.derivedETH.times(amount0))
         .times(bundle.ethPrice);
+    } else {
+      // console.log(
+      //   "ETH price not available in bundle for mint event, setting amountTotalUSD to 0",
+      // );
+      // console.log(
+      //   `Bundle ETH Price: ${bundle?.ethPrice.toString()} for transaction ${transactionId}`,
+      // );
+      context.log.warn(
+        `Bundle ETH Price: ${bundle?.ethPrice.toString()} for transaction ${transactionId}`,
+      );
     }
 
     // 10. Update existing mint entity with amounts and sender
@@ -830,9 +840,20 @@ Pair.Swap.handler(async ({ event, context }) => {
       context.Transaction.set(transaction);
     }
 
+    // find existing swaps in that transaction
+    const existingSwaps =
+      await context.Swap.getWhere.transaction_id.eq(transactionId);
+    let swapIndex = existingSwaps.length; // This will give us the next index for the swap in this transaction
+
+    // 9.5 update swap count in the transaction
+    context.Transaction.set({
+      ...transaction,
+      swapCount: BigInt(swapIndex),
+    });
+
     // Use array index format like subgraph: event.transaction.hash + "-" + swaps.length
     // Since we can't access the array directly, we'll use a simplified approach
-    const swapId = `${transactionId}-0`; // Simplified ID format
+    const swapId = `${transactionId}-${swapIndex}`; // Simplified ID format
 
     // Calculate USD value for swap - use tracked amount if available, otherwise derived amount
     let swapAmountUSD = trackedAmountUSD.isGreaterThan(ZERO_BD)
