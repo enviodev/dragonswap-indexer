@@ -9,7 +9,6 @@ import { ZERO_BI } from "./constants";
 import { getChainConfig } from "./chainRpcConfig";
 import { HandlerContext } from "generated/src/Types";
 
-
 // Load environment variables
 dotenv.config();
 
@@ -343,7 +342,6 @@ export const getTokenTotalSupply = createEffect(
     return ZERO_BI;
   },
 );
-
 
 // Effect to fetch token balance for an address
 export const getTokenBalance = createEffect(

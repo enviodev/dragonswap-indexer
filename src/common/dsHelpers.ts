@@ -1,4 +1,4 @@
-import { BigDecimal, Pair_Burn_event, Pair_Transfer_event } from "generated";
+import { BigDecimal, Pair_Burn_event, Pair_Transfer_event } from "envio";
 import { LiquidityPosition_t } from "generated/src/db/Entities.gen";
 import { HandlerContext } from "generated/src/Types";
 

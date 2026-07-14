@@ -1,14 +1,12 @@
 // Factory event handler for Uniswap V2 Factory contract
 // Reference: original-subgraph/src/v2/mappings/factory.ts
 
-import {
-  Factory, // Contract handler for Factory events
+import { indexer, // Contract handler for Factory events
   Pair, // Contract handler for Pair events
   Token, // Contract handler for Token events
   UniswapFactory, // Contract handler for UniswapFactory events
   Bundle, // Contract handler for Bundle events
-  PairTokenLookup, // Contract handler for PairTokenLookup events
-} from "generated";
+  PairTokenLookup, // Contract handler for PairTokenLookup events } from "envio";
 import {
   Pair_t,
   Token_t,
@@ -29,13 +27,18 @@ import {
 } from "../../common/effects";
 
 // Register dynamic Pair contracts with Envio
-Factory.PairCreated.contractRegister(({ event, context }) => {
-  context.addPair(`${event.params.pair}`);
-});
+indexer.contractRegister(
+  { contract: "Factory", event: "PairCreated" },
+  ({ event, context }) => {
+  context.chain.Pair.add(`${event.params.pair}`);
+}
+);
 
 // Implement handleNewPair function
 // Reference: original-subgraph/src/v2/mappings/core.ts - handleNewPair
-Factory.PairCreated.handler(async ({ event, context }) => {
+indexer.onEvent(
+  { contract: "Factory", event: "PairCreated" },
+  async ({ event, context }) => {
   try {
     // 1. Load/Create UniswapFactory entity (id: factoryAddress)
     const factoryAddress = getFactoryAddress();
@@ -214,4 +217,5 @@ Factory.PairCreated.handler(async ({ event, context }) => {
   } catch (error) {
     context.log.error(`Error in handleNewPair: ${error}`);
   }
-});
+}
+);

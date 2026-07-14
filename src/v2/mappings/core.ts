@@ -1,7 +1,7 @@
 // Core event handlers for Uniswap V2 Pair contract
 // Reference: original-subgraph/src/v2/mappings/core.ts
 
-import { Pair } from "generated";
+import { indexer, Pair } from "envio";
 import {
   Mint_t,
   Burn_t,
@@ -27,7 +27,7 @@ import {
   FEE_PERCENT,
 } from "../../common/constants";
 import { getFactoryAddress } from "../../common/chainConfig";
-import { BigDecimal } from "generated";
+import { indexer, BigDecimal } from "envio";
 import { convertTokenToDecimal, createUser } from "../../common/helpers";
 import {
   getTrackedVolumeUSD,
@@ -56,7 +56,9 @@ function isCompleteMint(mint: Mint_t): boolean {
 
 // Transfer handler - handles LP token transfers and creates Mint/Burn entities
 // Reference: original-subgraph/src/v2/mappings/core.ts - handleTransfer
-Pair.Transfer.handler(async ({ event, context }) => {
+indexer.onEvent(
+  { contract: "Pair", event: "Transfer" },
+  async ({ event, context }) => {
   try {
     // ignore initial transfers for first adds
     if (
@@ -386,11 +388,14 @@ Pair.Transfer.handler(async ({ event, context }) => {
   } catch (error) {
     context.log.error(`Error in handleTransfer: ${error}`);
   }
-});
+}
+);
 
 // Implement handleMint function
 // Reference: original-subgraph/src/v2/mappings/core.ts - handleMint
-Pair.Mint.handler(async ({ event, context }) => {
+indexer.onEvent(
+  { contract: "Pair", event: "Mint" },
+  async ({ event, context }) => {
   try {
     // 1. Load Transaction entity (created by handleTransfer)
     const transactionId = `${event.transaction.hash}`;
@@ -512,11 +517,14 @@ Pair.Mint.handler(async ({ event, context }) => {
   } catch (error) {
     context.log.error(`Error in handleMint: ${error}`);
   }
-});
+}
+);
 
 // Implement handleBurn function
 // Reference: original-subgraph/src/v2/mappings/core.ts - handleBurn
-Pair.Burn.handler(async ({ event, context }) => {
+indexer.onEvent(
+  { contract: "Pair", event: "Burn" },
+  async ({ event, context }) => {
   try {
     // 1. Load Transaction entity (created by handleTransfer)
     const transactionId = `${event.transaction.hash}`;
@@ -646,11 +654,14 @@ Pair.Burn.handler(async ({ event, context }) => {
   } catch (error) {
     context.log.error(`Error in handleBurn: ${error}`);
   }
-});
+}
+);
 
 // Implement handleSwap function
 // Reference: original-subgraph/src/v2/mappings/core.ts - handleSwap
-Pair.Swap.handler(async ({ event, context }) => {
+indexer.onEvent(
+  { contract: "Pair", event: "Swap" },
+  async ({ event, context }) => {
   try {
     // 1. Load Pair and UniswapFactory entities
     let pair = await context.Pair.get(`${event.srcAddress}`);
@@ -1009,11 +1020,14 @@ Pair.Swap.handler(async ({ event, context }) => {
   } catch (error) {
     context.log.error(`Error in handleSwap: ${error}`);
   }
-});
+}
+);
 
 // Implement handleSync function
 // Reference: original-subgraph/src/v2/mappings/core.ts - handleSync
-Pair.Sync.handler(async ({ event, context }) => {
+indexer.onEvent(
+  { contract: "Pair", event: "Sync" },
+  async ({ event, context }) => {
   try {
     // 1. Load Pair and UniswapFactory entities
     const pairId = `${event.srcAddress}`;
@@ -1180,4 +1194,5 @@ Pair.Sync.handler(async ({ event, context }) => {
   } catch (error) {
     context.log.error(`Error in handleSync: ${error}`);
   }
-});
+}
+);

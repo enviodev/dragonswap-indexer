@@ -9,7 +9,7 @@ import {
   getWhitelist,
   getStablecoins,
 } from "./chainConfig";
-import { BigDecimal, Token } from "generated";
+import { BigDecimal, Token } from "envio";
 import { HandlerContext } from "generated/src/Types";
 import { Pair } from "generated/src/Types.gen";
 
