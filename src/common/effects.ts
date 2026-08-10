@@ -110,6 +110,7 @@ async function safeRpcCall<T>(
 // Effect to fetch token symbol with fallback logic
 export const getTokenSymbol = createEffect(
   {
+    rateLimit: false,
     name: "getTokenSymbol",
     input: {
       tokenAddress: S.string,
@@ -185,6 +186,7 @@ export const getTokenSymbol = createEffect(
 // Effect to fetch token name with fallback logic
 export const getTokenName = createEffect(
   {
+    rateLimit: false,
     name: "getTokenName",
     input: {
       tokenAddress: S.string,
@@ -253,6 +255,7 @@ export const getTokenName = createEffect(
 // Effect to fetch token decimals
 export const getTokenDecimals = createEffect(
   {
+    rateLimit: false,
     name: "getTokenDecimals",
     input: {
       tokenAddress: S.string,
@@ -301,6 +304,7 @@ export const getTokenDecimals = createEffect(
 // Effect to fetch token total supply
 export const getTokenTotalSupply = createEffect(
   {
+    rateLimit: false,
     name: "getTokenTotalSupply",
     input: {
       tokenAddress: S.string,
@@ -346,6 +350,7 @@ export const getTokenTotalSupply = createEffect(
 // Effect to fetch token balance for an address
 export const getTokenBalance = createEffect(
   {
+    rateLimit: false,
     name: "getTokenBalance",
     input: {
       tokenAddress: S.string,
